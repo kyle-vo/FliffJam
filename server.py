@@ -6,7 +6,8 @@ import os
 import logging
 import csv
 from io import StringIO
-from flask import Flask, jsonify, render_template, send_file, Response
+from flask import Flask, jsonify, render_template, send_file, Response, request, session, redirect, url_for
+from functools import wraps
 from dotenv import load_dotenv
 
 from fetchers.odds_api import fetch_odds_data
@@ -26,21 +27,58 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+
+# Password protection
+APP_PASSWORD = os.getenv('APP_PASSWORD', 'fliff2024')
+
+
+def require_auth(f):
+    """Decorator to require authentication."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('authenticated'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page."""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == APP_PASSWORD:
+            session['authenticated'] = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Invalid password')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """Logout and clear session."""
+    session.clear()
+    return redirect(url_for('login'))
 
 
 @app.route('/')
+@require_auth
 def index():
     """Serve the main UI."""
     return render_template('index.html')
 
 
 @app.route('/spreads')
+@require_auth
 def spreads():
     """Serve the spreads view page."""
     return render_template('spreads.html')
 
 
 @app.route('/api/ev')
+@require_auth
 def get_ev_opportunities():
     """
     Fetch and calculate EV opportunities.
@@ -228,6 +266,7 @@ def export_csv():
 
 
 @app.route('/api/spreads')
+@require_auth
 def get_spreads():
     """
     Fetch and format spread data for spreads view.
