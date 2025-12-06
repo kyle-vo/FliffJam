@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fliff +EV Finder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .nav-tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            background: none;
+            border: none;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+        
+        .nav-tab:hover {
+            background: #e9ecef;
+        }
+        
+        .nav-tab.active {
+            color: #667eea;
+            background: white;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .filter-group input,
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px 30px;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .stat-card {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+            font-size: 1.2em;
+            color: #6c757d;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            margin: 20px 30px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        th:hover {
+            background: #e9ecef;
+        }
+        
+        th.sortable::after {
+            content: ' ⇅';
+            opacity: 0.3;
+        }
+        
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+        
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .positive-ev {
+            background: #d4edda !important;
+        }
+        
+        .high-ev {
+            background: #c3e6cb !important;
+            font-weight: bold;
+        }
+        
+        .ev-value {
+            font-weight: bold;
+        }
+        
+        .ev-positive {
+            color: #28a745;
+        }
+        
+        .ev-negative {
+            color: #dc3545;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .badge-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .badge-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+        
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            table {
+                font-size: 0.9em;
+            }
+            
+            th, td {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Fliff +EV Finder</h1>
+            <p>Find positive expected value betting opportunities by comparing Fliff with Pinnacle</p>
+        </header>
+        
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab active">🎯 EV Finder</a>
+            <a href="/spreads" class="nav-tab">📊 Spreads View</a>
+        </div>
+        
+        <div class="controls">
+            <div class="filter-group">
+                <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
+            </div>
+            
+            <div class="filter-group">
+                <label for="minEV">Min EV %:</label>
+                <input type="number" id="minEV" value="-100" step="0.1" onchange="applyFilters()" style="width: 80px;">
+                
+                <label for="maxEV">Max EV %:</label>
+                <input type="number" id="maxEV" value="100" step="0.1" onchange="applyFilters()" style="width: 80px;">
+                
+                <label for="sportFilter">Sport:</label>
+                <select id="sportFilter" onchange="applyFilters()">
+                    <option value="">Both</option>
+                    <option value="NBA">NBA Only</option>
+                    <option value="NFL">NFL Only</option>
+                </select>
+                
+                <label for="marketFilter">Market Type:</label>
+                <select id="marketFilter" onchange="applyFilters()">
+                    <option value="">All Markets</option>
+                    <option value="Points">Points</option>
+                    <option value="Rebounds">Rebounds</option>
+                    <option value="Assists">Assists</option>
+                    <option value="Pass TDs">Pass TDs</option>
+                    <option value="Pass Yards">Pass Yards</option>
+                    <option value="Rush Yards">Rush Yards</option>
+                    <option value="Spread">Spreads</option>
+                    <option value="Moneyline">Moneyline</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="demoAlert" style="display: none; background: #fff3cd; border: 2px solid #ffc107; color: #856404; padding: 15px; margin: 20px 30px; border-radius: 6px;">
+            <strong>ℹ️ Demo Mode:</strong> Fliff is not available in TheOddsAPI. Showing sample data to demonstrate functionality. 
+            The matching, vig removal, and EV calculation logic is fully functional and ready for use with real data.
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading betting opportunities...</div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="tableContainer" style="display: none; overflow-x: auto;">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortTable('sport')">Sport</th>
+                        <th class="sortable" onclick="sortTable('event')">Event</th>
+                        <th class="sortable" onclick="sortTable('player')">Player</th>
+                        <th class="sortable" onclick="sortTable('market_key')">Type</th>
+                        <th class="sortable" onclick="sortTable('line')">Line</th>
+                        <th class="sortable" onclick="sortTable('selection')">Over/Under</th>
+                        <th class="sortable" onclick="sortTable('fliff_odds')">Fliff Odds</th>
+                        <th class="sortable" onclick="sortTable('pinnacle_odds')">Pinnacle Odds</th>
+                        <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
+                        <th class="sortable" onclick="sortTable('ev_percent')">EV %</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="noData" class="no-data" style="display: none;">
+            No betting opportunities found. Try refreshing or adjusting filters.
+        </div>
+    </div>
+    
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let sortColumn = 'ev_percent';
+        let sortDirection = 'desc';
+        
+        // Load data on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+        
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const tableContainer = document.getElementById('tableContainer');
+            const noData = document.getElementById('noData');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            tableContainer.style.display = 'none';
+            noData.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/ev');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to fetch data');
+                }
+                
+                allData = data.opportunities || [];
+                
+                // Show demo alert if we have demo data
+                const demoAlert = document.getElementById('demoAlert');
+                if (allData.length > 0 && allData[0].event && allData[0].event.includes('Lakers')) {
+                    demoAlert.style.display = 'block';
+                } else {
+                    demoAlert.style.display = 'none';
+                }
+                
+                // Apply filters and render
+                applyFilters();
+                
+                loading.style.display = 'none';
+                
+                if (filteredData.length === 0) {
+                    noData.style.display = 'block';
+                } else {
+                    tableContainer.style.display = 'block';
+                }
+                
+            } catch (err) {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+                error.textContent = `Error: ${err.message}`;
+                console.error('Error loading data:', err);
+            }
+        }
+        
+        function applyFilters() {
+            const minEV = parseFloat(document.getElementById('minEV').value) || 0;
+            const maxEV = parseFloat(document.getElementById('maxEV').value) || 100;
+            const sportFilter = document.getElementById('sportFilter').value;
+            const marketFilter = document.getElementById('marketFilter').value;
+            
+            filteredData = allData.filter(item => {
+                // EV % filters
+                if (item.ev_percent < minEV) return false;
+                if (item.ev_percent > maxEV) return false;
+                
+                // Sport filter (NBA/NFL/Both)
+                if (sportFilter && item.sport !== sportFilter) return false;
+                
+                // Market type filter
+                if (marketFilter && item.type !== marketFilter) return false;
+                
+                return true;
+            });
+            
+            renderTable();
+        }
+        
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const tableContainer = document.getElementById('tableContainer');
+            const noData = document.getElementById('noData');
+            
+            if (filteredData.length === 0) {
+                tableContainer.style.display = 'none';
+                noData.style.display = 'block';
+                return;
+            }
+            
+            tableContainer.style.display = 'block';
+            noData.style.display = 'none';
+            
+            // Sort data
+            const sorted = [...filteredData].sort((a, b) => {
+                const aVal = a[sortColumn];
+                const bVal = b[sortColumn];
+                
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+                
+                const aStr = String(aVal).toLowerCase();
+                const bStr = String(bVal).toLowerCase();
+                return sortDirection === 'asc' 
+                    ? aStr.localeCompare(bStr)
+                    : bStr.localeCompare(aStr);
+            });
+            
+            tbody.innerHTML = sorted.map(item => {
+                const evClass = item.ev > 0 
+                    ? (item.ev_percent > 5 ? 'high-ev' : 'positive-ev')
+                    : '';
+                
+                // Determine sport
+                const sport = item.sport || 'NBA';
+                
+                return `
+                    <tr class="${evClass}">
+                        <td><span class="badge badge-primary">${sport}</span></td>
+                        <td>${escapeHtml(item.event)}</td>
+                        <td><strong>${escapeHtml(item.player)}</strong></td>
+                        <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
+                        <td>${item.line !== null ? item.line : 'N/A'}</td>
+                        <td>${item.selection || '-'}</td>
+                        <td><strong>${formatOdds(item.fliff_odds)}</strong></td>
+                        <td>${formatOdds(item.pinnacle_odds)}</td>
+                        <td>${(item.true_probability * 100).toFixed(1)}%</td>
+                        <td class="ev-value ${item.ev > 0 ? 'ev-positive' : 'ev-negative'}">
+                            ${item.ev_percent > 0 ? '+' : ''}${item.ev_percent.toFixed(2)}%
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'desc';
+            }
+            
+            // Update sort indicators
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            const th = event.target;
+            th.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+            
+            renderTable();
+        }
+        
+        function formatOdds(odds) {
+            if (odds > 0) return `+${odds}`;
+            return odds;
+        }
+        
+        function formatMarketKey(key) {
+            const map = {
+                'h2h': 'ML',
+                'spreads': 'Spread',
+                'player_points': 'Points',
+                'player_rebounds': 'Rebounds',
+                'player_assists': 'Assists',
+                'player_pass_tds': 'Pass TDs',
+                'player_pass_yds': 'Pass Yards',
+                'player_rush_yds': 'Rush Yards'
+            };
+            return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

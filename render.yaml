@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fliff-ev-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: False
+      - key: CACHE_TTL
+        value: 10800
+      - key: ODDS_API_KEY
+        sync: false

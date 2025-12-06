@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fliff Spreads - NBA & NFL</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .nav-tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            background: none;
+            border: none;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .nav-tab:hover {
+            background: #e9ecef;
+        }
+        
+        .nav-tab.active {
+            color: #667eea;
+            background: white;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+        
+        .spreads-container {
+            padding: 20px 30px;
+        }
+        
+        .game-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        
+        .game-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .game-header {
+            background: #f8f9fa;
+            padding: 12px 20px;
+            font-size: 0.9em;
+            color: #6c757d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .sport-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            background: #667eea;
+            color: white;
+        }
+        
+        .game-body {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            background: white;
+        }
+        
+        .team-row {
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .team-row:last-child {
+            border-bottom: none;
+        }
+        
+        .team-name {
+            font-weight: 600;
+            font-size: 1.05em;
+            flex: 1;
+        }
+        
+        .team-left {
+            text-align: left;
+        }
+        
+        .team-right {
+            text-align: right;
+        }
+        
+        .spread-line {
+            font-weight: 700;
+            color: #667eea;
+            margin: 0 15px;
+            min-width: 60px;
+            text-align: center;
+            font-size: 1.1em;
+        }
+        
+        .spread-odds {
+            font-weight: 600;
+            color: #495057;
+            min-width: 50px;
+            text-align: center;
+        }
+        
+        .odds-positive {
+            color: #28a745;
+        }
+        
+        .odds-negative {
+            color: #dc3545;
+        }
+        
+        .divider {
+            width: 1px;
+            background: #dee2e6;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+            font-size: 1.2em;
+            color: #6c757d;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            margin: 20px 30px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+        
+        .bookmaker-label {
+            font-size: 0.75em;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .game-body {
+                grid-template-columns: 1fr;
+            }
+            
+            .divider {
+                display: none;
+            }
+            
+            .team-name {
+                font-size: 0.95em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Fliff Spreads</h1>
+            <p>Compare Fliff and Pinnacle point spread lines</p>
+        </header>
+        
+        <div class="nav-tabs">
+            <button class="nav-tab" onclick="window.location.href='/'">🎯 EV Finder</button>
+            <button class="nav-tab active">📊 Spreads View</button>
+        </div>
+        
+        <div class="controls">
+            <div class="filter-group">
+                <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
+            </div>
+            
+            <div class="filter-group">
+                <label for="sportFilter">Sport:</label>
+                <select id="sportFilter" onchange="applyFilters()">
+                    <option value="">Both</option>
+                    <option value="NBA">NBA Only</option>
+                    <option value="NFL">NFL Only</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            Loading spreads data...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="spreadsContainer" class="spreads-container" style="display: none;"></div>
+        
+        <div id="noData" class="no-data" style="display: none;">
+            No spreads found. Try refreshing or adjusting filters.
+        </div>
+    </div>
+    
+    <script>
+        let allGames = [];
+        let filteredGames = [];
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+        
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const spreadsContainer = document.getElementById('spreadsContainer');
+            const noData = document.getElementById('noData');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            spreadsContainer.style.display = 'none';
+            noData.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/spreads');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to fetch data');
+                }
+                
+                allGames = data.games || [];
+                applyFilters();
+                
+                loading.style.display = 'none';
+                
+                if (filteredGames.length === 0) {
+                    noData.style.display = 'block';
+                } else {
+                    spreadsContainer.style.display = 'block';
+                }
+                
+            } catch (err) {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+                error.textContent = `Error: ${err.message}`;
+                console.error('Error loading data:', err);
+            }
+        }
+        
+        function applyFilters() {
+            const sportFilter = document.getElementById('sportFilter').value;
+            
+            filteredGames = allGames.filter(game => {
+                if (sportFilter && game.sport !== sportFilter) return false;
+                return true;
+            });
+            
+            renderSpreads();
+        }
+        
+        function renderSpreads() {
+            const container = document.getElementById('spreadsContainer');
+            const spreadsContainer = document.getElementById('spreadsContainer');
+            const noData = document.getElementById('noData');
+            
+            if (filteredGames.length === 0) {
+                spreadsContainer.style.display = 'none';
+                noData.style.display = 'block';
+                return;
+            }
+            
+            spreadsContainer.style.display = 'block';
+            noData.style.display = 'none';
+            
+            container.innerHTML = filteredGames.map(game => {
+                const hasFliff = game.fliff_away && game.fliff_home;
+                const hasPinnacle = game.pinnacle_away && game.pinnacle_home;
+                
+                return `
+                    <div class="game-card">
+                        <div class="game-header">
+                            <div>
+                                <span class="sport-badge">${game.sport}</span>
+                                <span style="margin-left: 10px;">${formatDateTime(game.commence_time)}</span>
+                            </div>
+                        </div>
+                        <div class="game-body">
+                            ${hasFliff ? `
+                            <div style="padding: 10px 20px;">
+                                <div class="bookmaker-label">Fliff</div>
+                                <div class="team-row">
+                                    <div class="team-name team-left">${escapeHtml(game.away_team)}</div>
+                                    <span class="spread-line">${formatSpread(game.fliff_away.line)}</span>
+                                    <span class="spread-odds ${game.fliff_away.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.fliff_away.odds)}</span>
+                                </div>
+                                <div class="team-row">
+                                    <div class="team-name team-left">${escapeHtml(game.home_team)}</div>
+                                    <span class="spread-line">${formatSpread(game.fliff_home.line)}</span>
+                                    <span class="spread-odds ${game.fliff_home.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.fliff_home.odds)}</span>
+                                </div>
+                            </div>
+                            ` : '<div style="padding: 20px; text-align: center; color: #6c757d;">No Fliff data</div>'}
+                            
+                            <div class="divider"></div>
+                            
+                            ${hasPinnacle ? `
+                            <div style="padding: 10px 20px;">
+                                <div class="bookmaker-label">Pinnacle</div>
+                                <div class="team-row">
+                                    <div class="team-name team-right">${escapeHtml(game.away_team)}</div>
+                                    <span class="spread-line">${formatSpread(game.pinnacle_away.line)}</span>
+                                    <span class="spread-odds ${game.pinnacle_away.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.pinnacle_away.odds)}</span>
+                                </div>
+                                <div class="team-row">
+                                    <div class="team-name team-right">${escapeHtml(game.home_team)}</div>
+                                    <span class="spread-line">${formatSpread(game.pinnacle_home.line)}</span>
+                                    <span class="spread-odds ${game.pinnacle_home.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.pinnacle_home.odds)}</span>
+                                </div>
+                            </div>
+                            ` : '<div style="padding: 20px; text-align: center; color: #6c757d;">No Pinnacle data</div>'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function formatSpread(line) {
+            if (line === null || line === undefined) return 'N/A';
+            const num = parseFloat(line);
+            return num > 0 ? `+${num}` : `${num}`;
+        }
+        
+        function formatOdds(odds) {
+            if (odds === null || odds === undefined) return 'N/A';
+            const num = parseInt(odds);
+            return num > 0 ? `+${num}` : `${num}`;
+        }
+        
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const options = { 
+                month: 'numeric', 
+                day: 'numeric', 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            };
+            return date.toLocaleString('en-US', options);
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
