@@ -20,14 +20,15 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = int(os.getenv('CACHE_TTL', 10800))  # 3 hours (10800 seconds) default
 CACHE_FILE = Path('cache_data.json')
 
-# Multiple API keys for rotation
-# Exhausted api keys this month:
-# 56c9e4eb59453e5c87b37ac42441b5c3
-API_KEYS = [
-    '4124617ec667d4e8a1dbe529927931ad',
-    'dfd152654fb9f24497f5d8fb56b69d85',
-    '61bd46d22fbd2518fb904b3c91d155c9'
-]
+# Multiple API keys for rotation - load from environment variable
+# Set in .env as: ODDS_API_KEYS=key1,key2,key3
+api_keys_env = os.getenv('ODDS_API_KEYS', '')
+if api_keys_env:
+    API_KEYS = [key.strip() for key in api_keys_env.split(',')]
+else:
+    # Fallback to single key for backwards compatibility
+    API_KEYS = [os.getenv('ODDS_API_KEY', '')]
+
 current_key_index = 0
 
 
