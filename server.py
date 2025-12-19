@@ -141,9 +141,6 @@ def get_ev_opportunities():
             'player_points': 'Points',
             'player_rebounds': 'Rebounds',
             'player_assists': 'Assists',
-            'player_pass_tds': 'Pass TDs',
-            'player_pass_yds': 'Pass Yards',
-            'player_rush_yds': 'Rush Yards',
             'spreads': 'Spread',
             'h2h': 'Moneyline'
         }
@@ -158,12 +155,9 @@ def get_ev_opportunities():
             opp['type'] = type_mapping.get(market_key, market_key.replace('_', ' ').title())
             
             # Determine sport - use market_key first (most reliable)
-            # NBA-specific markets
-            if 'player_points' in market_key or 'player_rebounds' in market_key or 'player_assists' in market_key:
+            # NBA-specific markets (all player props are NBA now)
+            if 'player_' in market_key:
                 opp['sport'] = 'NBA'
-            # NFL-specific markets
-            elif 'pass' in market_key or 'rush' in market_key:
-                opp['sport'] = 'NFL'
             else:
                 # For spreads, use team names
                 # NFL-only teams (no NBA overlap)

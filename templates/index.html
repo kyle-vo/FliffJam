@@ -342,24 +342,12 @@
                 <label for="maxEV">Max EV %:</label>
                 <input type="number" id="maxEV" value="100" step="0.1" onchange="applyFilters()" style="width: 80px;">
                 
-                <label for="sportFilter">Sport:</label>
-                <select id="sportFilter" onchange="applyFilters()">
-                    <option value="">Both</option>
-                    <option value="NBA">NBA Only</option>
-                    <option value="NFL">NFL Only</option>
-                </select>
-                
                 <label for="marketFilter">Market Type:</label>
                 <select id="marketFilter" onchange="applyFilters()">
                     <option value="">All Markets</option>
                     <option value="Points">Points</option>
                     <option value="Rebounds">Rebounds</option>
                     <option value="Assists">Assists</option>
-                    <option value="Pass TDs">Pass TDs</option>
-                    <option value="Pass Yards">Pass Yards</option>
-                    <option value="Rush Yards">Rush Yards</option>
-                    <option value="Spread">Spreads</option>
-                    <option value="Moneyline">Moneyline</option>
                 </select>
             </div>
         </div>
@@ -464,16 +452,12 @@
         function applyFilters() {
             const minEV = parseFloat(document.getElementById('minEV').value) || 0;
             const maxEV = parseFloat(document.getElementById('maxEV').value) || 100;
-            const sportFilter = document.getElementById('sportFilter').value;
             const marketFilter = document.getElementById('marketFilter').value;
             
             filteredData = allData.filter(item => {
                 // EV % filters
                 if (item.ev_percent < minEV) return false;
                 if (item.ev_percent > maxEV) return false;
-                
-                // Sport filter (NBA/NFL/Both)
-                if (sportFilter && item.sport !== sportFilter) return false;
                 
                 // Market type filter
                 if (marketFilter && item.type !== marketFilter) return false;
