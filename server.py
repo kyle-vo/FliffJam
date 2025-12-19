@@ -157,35 +157,36 @@ def get_ev_opportunities():
             # Convert market_key to readable type
             opp['type'] = type_mapping.get(market_key, market_key.replace('_', ' ').title())
             
-            # NFL indicators: pass/rush stats or NFL team names
-            nfl_teams = ['Chiefs', 'Bills', 'Lions', 'Cowboys', 'Texans', 'Dolphins', 'Jets',
-                        'Buccaneers', 'Saints', 'Cardinals', 'Rams', 'Raiders', 'Broncos',
-                        'Ravens', 'Steelers', 'Seahawks', 'Falcons', 'Panthers', 'Packers',
-                        'Patriots', 'Bengals', 'Browns', 'Colts', 'Jaguars', 'Titans',
-                        'Chargers', 'Vikings', 'Eagles', 'Giants', 'Washington', 'Bears',
-                        '49ers', 'Commanders']
-            
-            # NBA teams to distinguish from NFL
-            nba_teams = ['Lakers', 'Warriors', 'Celtics', 'Heat', 'Knicks', '76ers', 'Sixers',
-                        'Bucks', 'Nets', 'Raptors', 'Clippers', 'Suns', 'Mavericks', 'Nuggets',
-                        'Jazz', 'Trail Blazers', 'Blazers', 'Kings', 'Thunder', 'Pelicans',
-                        'Spurs', 'Rockets', 'Grizzlies', 'Timberwolves', 'Hornets', 'Magic',
-                        'Cavaliers', 'Cavs', 'Pistons', 'Pacers', 'Hawks', 'Wizards', 'Bulls']
-            
-            # Check NFL first (pass/rush keywords or NFL team names)
-            if 'pass' in market_key or 'rush' in market_key:
-                opp['sport'] = 'NFL'
-            elif any(team in event for team in nfl_teams):
-                opp['sport'] = 'NFL'
-            # Then check NBA team names
-            elif any(team in event for team in nba_teams):
+            # Determine sport - use market_key first (most reliable)
+            # NBA-specific markets
+            if 'player_points' in market_key or 'player_rebounds' in market_key or 'player_assists' in market_key:
                 opp['sport'] = 'NBA'
+            # NFL-specific markets
+            elif 'pass' in market_key or 'rush' in market_key:
+                opp['sport'] = 'NFL'
             else:
-                # Default based on market type
-                if 'player_points' in market_key or 'player_rebounds' in market_key or 'player_assists' in market_key:
+                # For spreads, use team names
+                # NFL-only teams (no NBA overlap)
+                nfl_only_teams = ['Chiefs', 'Bills', 'Cowboys', 'Texans', 'Dolphins',
+                                 'Buccaneers', 'Raiders', 'Broncos', 'Ravens', 'Steelers',
+                                 'Seahawks', 'Packers', 'Patriots', 'Bengals', 'Browns',
+                                 'Colts', 'Jaguars', 'Titans', 'Chargers', 'Vikings',
+                                 'Eagles', 'Washington', '49ers', 'Commanders']
+                
+                # NBA-only teams (no NFL overlap)
+                nba_only_teams = ['Lakers', 'Warriors', 'Celtics', 'Heat', 'Knicks', '76ers',
+                                 'Bucks', 'Nets', 'Raptors', 'Clippers', 'Mavericks', 'Nuggets',
+                                 'Trail Blazers', 'Blazers', 'Thunder', 'Pelicans',
+                                 'Timberwolves', 'Cavaliers', 'Cavs', 'Pistons', 'Wizards']
+                
+                # Check for unique team names first
+                if any(team in event for team in nfl_only_teams):
+                    opp['sport'] = 'NFL'
+                elif any(team in event for team in nba_only_teams):
                     opp['sport'] = 'NBA'
                 else:
-                    opp['sport'] = 'NBA'  # Default to NBA if unclear
+                    # Default to NBA for remaining cases
+                    opp['sport'] = 'NBA'
         
         logger.info(f"Found {len(positive_ev)} positive EV opportunities out of {len(opportunities)} total")
         

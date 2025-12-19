@@ -91,12 +91,34 @@ class OddsAPIFetcher:
         })
     
     def _make_request(self, endpoint: str, params: Dict) -> Optional[Dict]:
-        """Make API request with error handling."""
+        """Make API request with error handling and automatic key rotation on quota exhaustion."""
+        global current_key_index
+        
         url = f"{self.BASE_URL}/{endpoint}"
         params['apiKey'] = self.api_key
         
         try:
             response = self.session.get(url, params=params, timeout=10)
+            
+            # Check if quota exceeded (402 or remaining = 0)
+            remaining = response.headers.get('x-requests-remaining')
+            if response.status_code == 402 or (remaining and int(remaining) == 0):
+                logger.warning(f"⚠️ API key exhausted (remaining: {remaining}). Rotating to next key...")
+                
+                # Try next key
+                if len(API_KEYS) > 1:
+                    old_key_index = (current_key_index - 1) % len(API_KEYS)
+                    self.api_key = API_KEYS[current_key_index]
+                    current_key_index = (current_key_index + 1) % len(API_KEYS)
+                    logger.info(f"🔄 Switched to API key #{current_key_index} of {len(API_KEYS)}")
+                    
+                    # Retry with new key
+                    params['apiKey'] = self.api_key
+                    response = self.session.get(url, params=params, timeout=10)
+                else:
+                    logger.error("❌ Only one API key configured and it's exhausted!")
+                    return None
+            
             response.raise_for_status()
             
             # Log remaining requests
@@ -265,13 +287,12 @@ class OddsAPIFetcher:
         fliff_markets = []
         pinnacle_markets = []
         
-        # Markets to fetch - h2h and spreads work with regular odds endpoint
-        game_markets = ['h2h', 'spreads']
+        # Markets to fetch
+        game_markets = ['spreads']
         
         # Player props require event-specific endpoint
         player_markets = {
-            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists'],
-            'americanfootball_nfl': ['player_pass_tds', 'player_pass_yds', 'player_rush_yds']
+            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists']
         }
         
         for sport in sports:
