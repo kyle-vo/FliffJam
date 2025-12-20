@@ -133,6 +133,9 @@ def get_ev_opportunities():
         logger.info("Calculating EV...")
         opportunities = calculate_ev_from_data(fliff_markets, pinnacle_markets, matched)
         
+        # Filter out spreads (they have dedicated Spreads View page)
+        opportunities = [opp for opp in opportunities if opp.get('market_key') != 'spreads']
+        
         # Filter for positive EV only (optional - keeping all for now)
         positive_ev = [opp for opp in opportunities if opp['ev'] > 0]
         

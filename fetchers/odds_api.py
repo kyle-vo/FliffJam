@@ -287,8 +287,8 @@ class OddsAPIFetcher:
         fliff_markets = []
         pinnacle_markets = []
         
-        # Markets to fetch - spreads removed (available on dedicated Spreads View page)
-        game_markets = []
+        # Markets to fetch - spreads needed for Spreads View page
+        game_markets = ['spreads']
         
         # Player props require event-specific endpoint
         player_markets = {
