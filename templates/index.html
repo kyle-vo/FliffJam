@@ -543,11 +543,12 @@
                 // Determine sport
                 const sport = item.sport || 'NBA';
                 
+                // Get tracked status
+                const betId = getBetId(item);
+                const tracked = getTrackedBets();
+                const isTracked = tracked[betId];
+                
                 return `
-                    const betId = getBetId(item);
-                    const tracked = getTrackedBets();
-                    const isTracked = tracked[betId];
-                    
                     <tr class="${evClass}">
                         <td style="text-align: center;">
                             <input type="checkbox" 
