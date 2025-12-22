@@ -377,7 +377,7 @@
                         <th class="sortable" onclick="sortTable('fliff_odds')">Fliff Odds</th>
                         <th class="sortable" onclick="sortTable('pinnacle_odds')">Pinnacle Odds</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
-                        <th class="sortable" onclick="sortTable('ev_percent')">EV %</th>
+                        <th class="sortable" onclick="sortTable('value')">Value</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -393,7 +393,7 @@
     <script>
         let allData = [];
         let filteredData = [];
-        let sortColumn = 'ev_percent';
+        let sortColumn = 'value';
         let sortDirection = 'desc';
         
         // Load data on page load
@@ -517,8 +517,8 @@
                         <td><strong>${formatOdds(item.fliff_odds)}</strong></td>
                         <td>${formatOdds(item.pinnacle_odds)}</td>
                         <td>${(item.true_probability * 100).toFixed(1)}%</td>
-                        <td class="ev-value ${item.ev > 0 ? 'ev-positive' : 'ev-negative'}">
-                            ${item.ev_percent > 0 ? '+' : ''}${item.ev_percent.toFixed(2)}%
+                        <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
+                            ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}
                         </td>
                     </tr>
                 `;

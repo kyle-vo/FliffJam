@@ -136,6 +136,23 @@ def get_ev_opportunities():
         # Filter out spreads (they have dedicated Spreads View page)
         opportunities = [opp for opp in opportunities if opp.get('market_key') != 'spreads']
         
+        # Calculate value (odds difference on unified scale)
+        # Scale: -∞, ..., -200, -105, -100/+100 (0), +105, +200, ..., +∞
+        for opp in opportunities:
+            fliff_odds = opp.get('fliff_odds', 0)
+            pinnacle_odds = opp.get('pinnacle_odds', 0)
+            
+            # Convert American odds to unified scale (center at -100/+100 = 0)
+            def odds_to_scale(american_odds):
+                if american_odds < 0:
+                    return american_odds + 100  # e.g., -105 → -5
+                else:
+                    return american_odds - 100  # e.g., +106 → 6
+            
+            fliff_scale = odds_to_scale(fliff_odds)
+            pinnacle_scale = odds_to_scale(pinnacle_odds)
+            opp['value'] = fliff_scale - pinnacle_scale
+        
         # Filter for positive EV only (optional - keeping all for now)
         positive_ev = [opp for opp in opportunities if opp['ev'] > 0]
         
