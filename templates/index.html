@@ -349,6 +349,11 @@
                     <option value="Rebounds">Rebounds</option>
                     <option value="Assists">Assists</option>
                 </select>
+                
+                <label style="margin-left: 20px;">
+                    <input type="checkbox" id="hideTracked" onchange="applyFilters()">
+                    Hide Tracked
+                </label>
             </div>
         </div>
         
@@ -368,6 +373,7 @@
             <table id="dataTable">
                 <thead>
                     <tr>
+                        <th style="width: 50px;">Tracked</th>
                         <th class="sortable" onclick="sortTable('sport')">Sport</th>
                         <th class="sortable" onclick="sortTable('event')">Event</th>
                         <th class="sortable" onclick="sortTable('player')">Player</th>
@@ -449,15 +455,46 @@
             }
         }
         
+        // LocalStorage functions for tracked bets
+        function getTrackedBets() {
+            const tracked = localStorage.getItem('trackedBets');
+            return tracked ? JSON.parse(tracked) : {};
+        }
+        
+        function saveTrackedBets(tracked) {
+            localStorage.setItem('trackedBets', JSON.stringify(tracked));
+        }
+        
+        function getBetId(item) {
+            // Create unique ID from bet details
+            return `${item.event}_${item.player}_${item.market_key}_${item.line}_${item.selection}`;
+        }
+        
+        function toggleTracked(betId) {
+            const tracked = getTrackedBets();
+            if (tracked[betId]) {
+                delete tracked[betId];
+            } else {
+                tracked[betId] = Date.now();
+            }
+            saveTrackedBets(tracked);
+            renderTable();
+        }
+        
         function applyFilters() {
             const minEV = parseFloat(document.getElementById('minEV').value) || 0;
             const maxEV = parseFloat(document.getElementById('maxEV').value) || 100;
             const marketFilter = document.getElementById('marketFilter').value;
+            const hideTracked = document.getElementById('hideTracked').checked;
+            const tracked = getTrackedBets();
             
             filteredData = allData.filter(item => {
                 // EV % filters
                 if (item.ev_percent < minEV) return false;
                 if (item.ev_percent > maxEV) return false;
+                
+                // Hide tracked filter
+                if (hideTracked && tracked[getBetId(item)]) return false;
                 
                 // Market type filter
                 if (marketFilter && item.type !== marketFilter) return false;
@@ -507,7 +544,17 @@
                 const sport = item.sport || 'NBA';
                 
                 return `
+                    const betId = getBetId(item);
+                    const tracked = getTrackedBets();
+                    const isTracked = tracked[betId];
+                    
                     <tr class="${evClass}">
+                        <td style="text-align: center;">
+                            <input type="checkbox" 
+                                   ${isTracked ? 'checked' : ''} 
+                                   onchange="toggleTracked('${betId}')"
+                                   style="cursor: pointer; width: 18px; height: 18px;">
+                        </td>
                         <td><span class="badge badge-primary">${sport}</span></td>
                         <td>${escapeHtml(item.event)}</td>
                         <td><strong>${escapeHtml(item.player)}</strong></td>
