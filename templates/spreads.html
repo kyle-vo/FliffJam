@@ -128,13 +128,27 @@
         
         .spreads-container {
             padding: 20px 30px;
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 15px !important;
+        }
+        
+        @media (max-width: 1400px) {
+            .spreads-container {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        
+        @media (max-width: 900px) {
+            .spreads-container {
+                grid-template-columns: 1fr !important;
+            }
         }
         
         .game-card {
             background: white;
             border: 1px solid #dee2e6;
             border-radius: 8px;
-            margin-bottom: 15px;
             overflow: hidden;
             transition: all 0.3s;
         }
@@ -145,8 +159,8 @@
         
         .game-header {
             background: #f8f9fa;
-            padding: 12px 20px;
-            font-size: 0.9em;
+            padding: 8px 15px;
+            font-size: 0.85em;
             color: #6c757d;
             display: flex;
             justify-content: space-between;
@@ -164,13 +178,11 @@
         }
         
         .game-body {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
             background: white;
         }
         
         .team-row {
-            padding: 15px 20px;
+            padding: 8px 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -183,7 +195,7 @@
         
         .team-name {
             font-weight: 600;
-            font-size: 1.05em;
+            font-size: 0.95em;
             flex: 1;
         }
         
@@ -297,6 +309,7 @@
         <div class="nav-tabs">
             <button class="nav-tab" onclick="window.location.href='/'">🏀 Player Props</button>
             <button class="nav-tab active">📊 Spreads View</button>
+            <button class="nav-tab" onclick="window.location.href='/alternate-spreads'">📈 Alternate Spreads</button>
         </div>
         
         <div class="controls">
@@ -400,7 +413,6 @@
             noData.style.display = 'none';
             
             container.innerHTML = filteredGames.map(game => {
-                const hasFliff = game.fliff_away && game.fliff_home;
                 const hasPinnacle = game.pinnacle_away && game.pinnacle_home;
                 
                 return `
@@ -412,34 +424,16 @@
                             </div>
                         </div>
                         <div class="game-body">
-                            ${hasFliff ? `
-                            <div style="padding: 10px 20px;">
-                                <div class="bookmaker-label">Fliff</div>
-                                <div class="team-row">
-                                    <div class="team-name team-left">${escapeHtml(game.away_team)}</div>
-                                    <span class="spread-line">${formatSpread(game.fliff_away.line)}</span>
-                                    <span class="spread-odds ${game.fliff_away.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.fliff_away.odds)}</span>
-                                </div>
-                                <div class="team-row">
-                                    <div class="team-name team-left">${escapeHtml(game.home_team)}</div>
-                                    <span class="spread-line">${formatSpread(game.fliff_home.line)}</span>
-                                    <span class="spread-odds ${game.fliff_home.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.fliff_home.odds)}</span>
-                                </div>
-                            </div>
-                            ` : '<div style="padding: 20px; text-align: center; color: #6c757d;">No Fliff data</div>'}
-                            
-                            <div class="divider"></div>
-                            
                             ${hasPinnacle ? `
-                            <div style="padding: 10px 20px;">
+                            <div style="padding: 10px 15px;">
                                 <div class="bookmaker-label">Pinnacle</div>
                                 <div class="team-row">
-                                    <div class="team-name team-right">${escapeHtml(game.away_team)}</div>
+                                    <div class="team-name team-left">${escapeHtml(game.away_team)}</div>
                                     <span class="spread-line">${formatSpread(game.pinnacle_away.line)}</span>
                                     <span class="spread-odds ${game.pinnacle_away.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.pinnacle_away.odds)}</span>
                                 </div>
                                 <div class="team-row">
-                                    <div class="team-name team-right">${escapeHtml(game.home_team)}</div>
+                                    <div class="team-name team-left">${escapeHtml(game.home_team)}</div>
                                     <span class="spread-line">${formatSpread(game.pinnacle_home.line)}</span>
                                     <span class="spread-odds ${game.pinnacle_home.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.pinnacle_home.odds)}</span>
                                 </div>

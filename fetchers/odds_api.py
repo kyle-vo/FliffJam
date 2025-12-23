@@ -290,9 +290,9 @@ class OddsAPIFetcher:
         # Markets to fetch - spreads needed for Spreads View page
         game_markets = ['spreads']
         
-        # Player props require event-specific endpoint
+        # Player props and alternate spreads require event-specific endpoint
         player_markets = {
-            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists']
+            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists', 'alternate_spreads']
         }
         
         for sport in sports:
@@ -357,9 +357,17 @@ class OddsAPIFetcher:
                 except Exception as e:
                     logger.error(f"  ❌ Error fetching sharp book {market}: {e}")
             
-            # Fetch player props (event-specific endpoint)
+            # Fetch player props and alternate spreads (event-specific endpoint)
+            # NBA: player props + alternate spreads
+            # NFL: alternate spreads only
+            markets_to_fetch = []
             if sport in player_markets:
-                logger.info(f"Fetching events for {sport} player props...")
+                markets_to_fetch = player_markets[sport]
+            elif sport == 'americanfootball_nfl':
+                markets_to_fetch = ['alternate_spreads']
+            
+            if markets_to_fetch:
+                logger.info(f"Fetching events for {sport} event-specific markets...")
                 try:
                     events = self.get_events(sport)
                     
@@ -378,17 +386,17 @@ class OddsAPIFetcher:
                     
                     logger.info(f"  Found {len(upcoming_events)} upcoming events (filtered out {len(events) - len(upcoming_events)} live/past games)")
                     
-                    # Limit to first 3 events to save API requests (was 5)
-                    for event in upcoming_events[:3]:
+                    # Fetch all upcoming events
+                    for event in upcoming_events:
                         event_id = event.get('id')
                         event_name = f"{event.get('home_team')} vs {event.get('away_team')}"
                         
-                        # Fetch player props for this event
-                        markets_str = ','.join(player_markets[sport])
+                        # Build markets string for this sport
+                        markets_str = ','.join(markets_to_fetch)
                         
-                        # Fetch Fliff player props
+                        # Fetch Fliff event data
                         try:
-                            logger.info(f"  Fetching Fliff player props for {event_name}...")
+                            logger.info(f"  Fetching Fliff event markets for {event_name}...")
                             fliff_event_data = self.get_event_odds(
                                 sport=sport,
                                 event_id=event_id,
@@ -402,12 +410,12 @@ class OddsAPIFetcher:
                                     if bookmaker['key'] == 'fliff':
                                         normalized = self.normalize_market(fliff_event_data, bookmaker)
                                         fliff_markets.extend(normalized)
-                                        logger.info(f"    ✅ Got {len(normalized)} player props")
+                                        logger.info(f"    ✅ Got {len(normalized)} markets")
                             
                         except Exception as e:
-                            logger.warning(f"    ⚠️ No Fliff player props: {e}")
+                            logger.warning(f"    ⚠️ No Fliff event data: {e}")
                         
-                        # Fetch Pinnacle player props
+                        # Fetch Pinnacle event data
                         try:
                             sharp_event_data = self.get_event_odds(
                                 sport=sport,
