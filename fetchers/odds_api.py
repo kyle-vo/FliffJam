@@ -29,7 +29,9 @@ else:
     # Fallback to single key for backwards compatibility
     API_KEYS = [os.getenv('ODDS_API_KEY', '')]
 
-current_key_index = 0
+# Start with key #6 (index 5) since keys 1-5 are exhausted
+# This ensures NBA spreads are fetched successfully from the start
+current_key_index = 5 if len(API_KEYS) >= 6 else 0
 
 
 def load_cache() -> Dict:
@@ -332,19 +334,8 @@ class OddsAPIFetcher:
                         bookmakers='pinnacle'
                     )
                     
-                    if not sharp_events:
-                        # Fallback to other sharp books
-                        logger.warning("  ⚠️ Pinnacle not available, trying alternatives...")
-                        for book in ['lowvig', 'betonlineag']:
-                            sharp_events = self.get_odds(
-                                sport=sport,
-                                regions='us',
-                                markets=market,
-                                bookmakers=book
-                            )
-                            if sharp_events:
-                                logger.info(f"  ✅ Using {book} as sharp book")
-                                break
+                    # Skip fallback bookmakers to reduce API calls (saves ~70 calls per refresh)
+                    # User specifically wants Pinnacle odds only for accurate comparison
                     
                     if sharp_events:
                         for event in sharp_events:
@@ -359,12 +350,10 @@ class OddsAPIFetcher:
                     logger.error(f"  ❌ Error fetching sharp book {market}: {e}")
             
             # Fetch player props and alternate spreads (event-specific endpoint)
+            # Only fetch for NBA - NFL player props and alt spreads removed to save ~64 API calls
             markets_to_fetch = []
             if sport in player_markets:
                 markets_to_fetch = player_markets[sport]
-            elif sport == 'americanfootball_nfl':
-                # NFL: only fetch alternate_spreads
-                markets_to_fetch = ['alternate_spreads']
             
             if markets_to_fetch:
                 logger.info(f"Fetching events for {sport} event-specific markets...")
@@ -425,18 +414,8 @@ class OddsAPIFetcher:
                                 bookmakers='pinnacle'
                             )
                             
-                            if not sharp_event_data or not sharp_event_data.get('bookmakers'):
-                                # Try alternative books
-                                for book in ['lowvig', 'betonlineag', 'draftkings']:
-                                    sharp_event_data = self.get_event_odds(
-                                        sport=sport,
-                                        event_id=event_id,
-                                        regions='us',
-                                        markets=markets_str,
-                                        bookmakers=book
-                                    )
-                                    if sharp_event_data and sharp_event_data.get('bookmakers'):
-                                        break
+                            # Skip fallback bookmakers to reduce API calls (saves ~70 calls per refresh)
+                            # User specifically wants Pinnacle odds only for accurate comparison
                             
                             if sharp_event_data and sharp_event_data.get('bookmakers'):
                                 for bookmaker in sharp_event_data['bookmakers']:
