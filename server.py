@@ -38,12 +38,6 @@ def spreads():
     return render_template('spreads.html')
 
 
-@app.route('/alternate-spreads')
-def alternate_spreads():
-    """Serve the alternate spreads view page."""
-    return render_template('alternate_spreads.html')
-
-
 @app.route('/api/ev')
 def get_ev_opportunities():
     """
@@ -99,8 +93,8 @@ def get_ev_opportunities():
         logger.info("Calculating EV...")
         opportunities = calculate_ev_multi_from_data(target_markets, sharp_markets, matched)
         
-        # Filter out spreads and alternate_spreads (they have dedicated tabs)
-        opportunities = [opp for opp in opportunities if opp.get('market_key') not in ['spreads', 'alternate_spreads']]
+        # Filter out spreads (they have a dedicated tab)
+        opportunities = [opp for opp in opportunities if opp.get('market_key') != 'spreads']
         
         # Calculate value (odds difference on unified scale)
         # Scale: -∞, ..., -200, -105, -100/+100 (0), +105, +200, ..., +∞
@@ -127,6 +121,10 @@ def get_ev_opportunities():
             'player_points': 'Points',
             'player_rebounds': 'Rebounds',
             'player_assists': 'Assists',
+            'player_points_assists': 'Points + Assists',
+            'player_points_rebounds': 'Points + Rebounds',
+            'player_rebounds_assists': 'Rebounds + Assists',
+            'player_points_rebounds_assists': 'Pts + Reb + Ast',
             'spreads': 'Spread',
             'h2h': 'Moneyline',
             'batter_hits': 'Hits',
@@ -370,62 +368,6 @@ def get_spreads():
             'error': str(e),
             'games': []
         }), 500
-
-
-@app.route('/api/alternate-spreads')
-def get_alternate_spreads():
-    """API endpoint for fetching alternate spread data with value calculation."""
-    try:
-        logger.info("Fetching alternate spreads data...")
-        
-        # Fetch data from TheOddsAPI (will use cache if available)
-        odds_data = fetch_odds_data()
-        target_markets = odds_data.get('target', [])
-        sharp_markets = odds_data.get('sharp', [])
-        
-        if not target_markets or not sharp_markets:
-            logger.warning("No markets found")
-            return jsonify([])
-        
-        logger.info(f"Fetched {len(target_markets)} target markets and {len(sharp_markets)} sharp markets")
-        
-        # Match markets
-        matched = match_markets(target_markets, sharp_markets)
-        
-        if not matched:
-            logger.warning("No matching markets found")
-            return jsonify([])
-        
-        # Calculate EV for all markets
-        opportunities = calculate_ev_from_data(target_markets, sharp_markets, matched)
-        
-        # Filter for alternate_spreads only
-        alt_spreads_data = [opp for opp in opportunities if opp.get('market_key') == 'alternate_spreads']
-        
-        # Add value calculation for each opportunity
-        def odds_to_scale(american_odds):
-            """Convert American odds to unified scale centered at -100/+100 = 0."""
-            if american_odds < 0:
-                return american_odds + 100  # -105 → -5
-            else:
-                return american_odds - 100  # +106 → 6
-        
-        for opp in alt_spreads_data:
-            target_odds = opp.get('target_odds')
-            sharp_odds = opp.get('sharp_odds')
-            
-            if target_odds is not None and sharp_odds is not None:
-                target_scale = odds_to_scale(target_odds)
-                sharp_scale = odds_to_scale(sharp_odds)
-                opp['value'] = target_scale - sharp_scale
-            else:
-                opp['value'] = None
-        
-        logger.info(f"Returning {len(alt_spreads_data)} alternate spread opportunities")
-        return jsonify(alt_spreads_data)
-    except Exception as e:
-        logger.error(f"Error in /api/alternate-spreads: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/health')

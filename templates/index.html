@@ -328,7 +328,6 @@
         <div class="nav-tabs">
             <a href="/" class="nav-tab active">🏀 Player Props</a>
             <a href="/spreads" class="nav-tab">📊 Spreads View</a>
-            <a href="/alternate-spreads" class="nav-tab">📈 Alternate Spreads</a>
         </div>
         
         <div class="controls">
@@ -337,12 +336,19 @@
             </div>
             
             <div class="filter-group">
-                <label for="minEV">Min EV %:</label>
-                <input type="number" id="minEV" value="-100" step="0.1" onchange="applyFilters()" style="width: 80px;">
-                
-                <label for="maxEV">Max EV %:</label>
-                <input type="number" id="maxEV" value="100" step="0.1" onchange="applyFilters()" style="width: 80px;">
-                
+                <label for="minOdds">Min Odds:</label>
+                <input type="number" id="minOdds" value="-400" step="5" onchange="applyFilters()" style="width: 80px;" title="Minimum My Book odds to show">
+
+                <label for="maxOdds">Max Odds:</label>
+                <input type="number" id="maxOdds" value="200" step="5" onchange="applyFilters()" style="width: 80px;" title="Maximum My Book odds to show">
+
+                <label for="bookFilter">Book:</label>
+                <select id="bookFilter" onchange="applyFilters()">
+                    <option value="">Both</option>
+                    <option value="kalshi">Kalshi</option>
+                    <option value="prizepicks">PrizePicks</option>
+                </select>
+
                 <label for="sportFilter">Sport:</label>
                 <select id="sportFilter" onchange="applyFilters()">
                     <option value="">All Sports</option>
@@ -359,19 +365,18 @@
                         <option value="Points">Points</option>
                         <option value="Rebounds">Rebounds</option>
                         <option value="Assists">Assists</option>
+                        <option value="Points + Assists">Points + Assists</option>
+                        <option value="Points + Rebounds">Points + Rebounds</option>
                     </optgroup>
                     <optgroup label="Baseball">
-                        <option value="Hits">Hits</option>
-                        <option value="Home Runs">Home Runs</option>
                         <option value="Strikeouts">Strikeouts</option>
                         <option value="Total Bases">Total Bases</option>
-                        <option value="RBIs">RBIs</option>
                     </optgroup>
                     <optgroup label="Other">
                         <option value="Moneyline">Moneyline</option>
                     </optgroup>
                 </select>
-                
+
                 <label style="margin-left: 20px;">
                     <input type="checkbox" id="hideTracked" onchange="applyFilters()">
                     Hide Tracked
@@ -506,17 +511,25 @@
         }
         
         function applyFilters() {
-            const minEV = parseFloat(document.getElementById('minEV').value) || 0;
-            const maxEV = parseFloat(document.getElementById('maxEV').value) || 100;
+            const minOddsRaw = document.getElementById('minOdds').value;
+            const maxOddsRaw = document.getElementById('maxOdds').value;
+            const minOdds = minOddsRaw === '' ? -Infinity : parseFloat(minOddsRaw);
+            const maxOdds = maxOddsRaw === '' ? Infinity : parseFloat(maxOddsRaw);
+            const bookFilter = document.getElementById('bookFilter').value;
             const sportFilter = document.getElementById('sportFilter').value;
             const marketFilter = document.getElementById('marketFilter').value;
             const hideTracked = document.getElementById('hideTracked').checked;
             const tracked = getTrackedBets();
 
             filteredData = allData.filter(item => {
-                // EV % filters
-                if (item.ev_percent < minEV) return false;
-                if (item.ev_percent > maxEV) return false;
+                // My Book odds range filter
+                const odds = item.target_odds;
+                if (odds === null || odds === undefined) return false;
+                if (odds < minOdds) return false;
+                if (odds > maxOdds) return false;
+
+                // Book filter (kalshi / prizepicks / both)
+                if (bookFilter && (item.target_book || '').toLowerCase() !== bookFilter) return false;
 
                 // Hide tracked filter
                 if (hideTracked && tracked[getBetId(item)]) return false;
@@ -651,6 +664,10 @@
                 'player_points': 'Points',
                 'player_rebounds': 'Rebounds',
                 'player_assists': 'Assists',
+                'player_points_assists': 'Pts + Ast',
+                'player_points_rebounds': 'Pts + Reb',
+                'player_rebounds_assists': 'Reb + Ast',
+                'player_points_rebounds_assists': 'Pts+Reb+Ast',
                 'player_pass_tds': 'Pass TDs',
                 'player_pass_yds': 'Pass Yards',
                 'player_rush_yds': 'Rush Yards',

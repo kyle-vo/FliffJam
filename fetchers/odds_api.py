@@ -16,8 +16,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Cache for 3 hours to avoid burning API requests
-CACHE_TTL = int(os.getenv('CACHE_TTL', 10800))  # 3 hours (10800 seconds) default
+# Cache for 30 minutes to avoid burning API requests
+CACHE_TTL = int(os.getenv('CACHE_TTL', 1800))  # 30 minutes (1800 seconds) default
 CACHE_FILE = Path('cache_data.json')
 
 # Multiple API keys for rotation - load from environment variable
@@ -275,7 +275,6 @@ class OddsAPIFetcher:
         (pinnacle, draftkings, fanduel) in a single request per market —
         one combined call costs less API quota than per-book calls.
         Includes moneylines (h2h), spreads, and player props.
-        NOTE: Does NOT include alternate_spreads to avoid timeout - use fetch_alternate_spreads() instead
 
         Args:
             sports: List of sport keys. Defaults to NBA and NFL.
@@ -315,11 +314,12 @@ class OddsAPIFetcher:
         # because Kalshi is an exchange that mostly trades game winners
         game_markets = ['h2h', 'spreads']
         
-        # Player props require event-specific endpoint (includes alternate_spreads)
+        # Player props require event-specific endpoint
         player_markets = {
-            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists', 'alternate_spreads'],
-            'basketball_wnba': ['player_points', 'player_rebounds', 'player_assists'],
-            'baseball_mlb': ['batter_hits', 'batter_home_runs', 'pitcher_strikeouts', 'batter_total_bases', 'batter_rbis']
+            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists'],
+            'basketball_wnba': ['player_points', 'player_rebounds', 'player_assists',
+                                'player_points_assists', 'player_points_rebounds'],
+            'baseball_mlb': ['pitcher_strikeouts', 'batter_total_bases']
         }
         
         for sport in sports:
@@ -345,8 +345,8 @@ class OddsAPIFetcher:
                 except Exception as e:
                     logger.error(f"  ❌ Error fetching {market}: {e}")
             
-            # Fetch player props and alternate spreads (event-specific endpoint)
-            # Only fetch for NBA - NFL player props and alt spreads removed to save ~64 API calls
+            # Fetch player props (event-specific endpoint)
+            # NFL player props removed to save ~64 API calls
             markets_to_fetch = []
             if sport in player_markets:
                 markets_to_fetch = player_markets[sport]
