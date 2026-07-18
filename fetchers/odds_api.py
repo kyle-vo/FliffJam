@@ -702,12 +702,24 @@ class OddsAPIFetcher:
             
             fliff_markets.append(fliff_m)
         
+        # Add DraftKings and FanDuel variants of every Pinnacle market so the
+        # multi-book demo view shows all three sharp columns (each shifted a few
+        # cents off Pinnacle, as a soft book would be).
+        sharp_markets = list(pinnacle_markets)
+        for book, shift in (('draftkings', -6), ('fanduel', -4)):
+            for m in pinnacle_markets:
+                sm = m.copy()
+                sm['bookmaker'] = book
+                sm['american_odds'] = m['american_odds'] + (shift if m['american_odds'] > 0 else shift)
+                sm['decimal_odds'] = self._american_to_decimal(sm['american_odds'])
+                sharp_markets.append(sm)
+
         logger.info("📊 DEMO DATA LOADED - This is sample data to demonstrate the app")
         logger.info(f"   To use real data: {'/'.join(TARGET_BOOKMAKERS)} must return data from TheOddsAPI")
 
         return {
             'target': fliff_markets,
-            'sharp': pinnacle_markets
+            'sharp': sharp_markets
         }
 
 

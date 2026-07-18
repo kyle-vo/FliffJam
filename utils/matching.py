@@ -131,6 +131,90 @@ class MarketMatcher:
 
         return None
 
+    def _best_match_in(self, target_market: Dict, candidates: List[Dict]) -> Optional[Dict]:
+        """Return the best candidate (by name score) that clears all filters, or None."""
+        target_player = target_market.get('player', '')
+        target_selection = target_market.get('selection', '')
+        target_line = target_market.get('line')
+
+        best_match = None
+        best_score = 0
+        for candidate in candidates:
+            if candidate.get('event') != target_market.get('event'):
+                continue
+            if target_selection and candidate.get('selection', '').lower() != target_selection.lower():
+                continue
+
+            name_score = fuzz.ratio(target_player.lower(), candidate.get('player', '').lower())
+            if name_score < self.similarity_threshold:
+                continue
+
+            sharp_line = candidate.get('line')
+            if target_line is not None and sharp_line is not None:
+                if abs(target_line - sharp_line) > self.line_tolerance:
+                    continue
+
+            if name_score > best_score:
+                best_score = name_score
+                best_match = candidate
+
+        return best_match
+
+    def match_markets_multi(
+        self,
+        target_markets: List[Dict],
+        sharp_markets: List[Dict]
+    ) -> List[Dict]:
+        """
+        Like match_markets, but attaches EVERY sharp book that carries the line
+        (one best match per book) instead of only the single sharpest one.
+        OddsJam-style: one target line vs all sharp books side by side.
+
+        Returns:
+        {
+            'target': {...},
+            'sharps': {'pinnacle': {...}, 'draftkings': {...}, 'fanduel': {...}},
+            'match_score': 95.5
+        }
+        """
+        # Group sharp markets by (market_key, bookmaker)
+        sharp_by_market = {}
+        for market in sharp_markets:
+            key = (market.get('market_key', ''), market.get('bookmaker', ''))
+            sharp_by_market.setdefault(key, []).append(market)
+
+        # Which books exist for each market_key, priority order first
+        matches = []
+        for target_market in target_markets:
+            market_key = target_market.get('market_key', '')
+            seen = set(SHARP_PRIORITY)
+            extra = sorted({bk for (mk, bk) in sharp_by_market if mk == market_key and bk not in seen})
+
+            sharps = {}
+            best_overall = 0
+            for book in SHARP_PRIORITY + extra:
+                candidates = sharp_by_market.get((market_key, book), [])
+                if not candidates:
+                    continue
+                match = self._best_match_in(target_market, candidates)
+                if match:
+                    sharps[book] = match
+                    score = fuzz.ratio(
+                        target_market.get('player', '').lower(),
+                        match.get('player', '').lower()
+                    )
+                    best_overall = max(best_overall, score)
+
+            if sharps:
+                matches.append({
+                    'target': target_market,
+                    'sharps': sharps,
+                    'match_score': best_overall
+                })
+
+        logger.info(f"Multi-matched {len(matches)} of {len(target_markets)} target markets across sharp books")
+        return matches
+
     def find_two_sided_pairs(self, markets: List[Dict]) -> List[Dict]:
         """
         Find Over/Under pairs for the same market to enable vig removal.

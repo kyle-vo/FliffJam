@@ -403,7 +403,9 @@
                         <th class="sortable" onclick="sortTable('line')">Line</th>
                         <th class="sortable" onclick="sortTable('selection')">Over/Under</th>
                         <th class="sortable" onclick="sortTable('target_odds')">My Book</th>
-                        <th class="sortable" onclick="sortTable('sharp_odds')">Sharp Book</th>
+                        <th>Pinnacle</th>
+                        <th>DraftKings</th>
+                        <th>FanDuel</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
                         <th class="sortable" onclick="sortTable('value')">Value</th>
                     </tr>
@@ -589,7 +591,9 @@
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
                         <td>${item.selection || '-'}</td>
                         <td><strong>${formatOdds(item.target_odds)}</strong> <span style="color: #6c757d; font-size: 11px;">${escapeHtml(item.target_book || '')}</span></td>
-                        <td>${formatOdds(item.sharp_odds)} <span style="color: #6c757d; font-size: 11px;">${escapeHtml(item.sharp_book || '')}</span></td>
+                        ${sharpCell(item, 'pinnacle')}
+                        ${sharpCell(item, 'draftkings')}
+                        ${sharpCell(item, 'fanduel')}
                         <td>${(item.true_probability * 100).toFixed(1)}%</td>
                         <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
                             ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}
@@ -619,10 +623,27 @@
         }
         
         function formatOdds(odds) {
+            if (odds === null || odds === undefined) return 'N/A';
             if (odds > 0) return `+${odds}`;
             return odds;
         }
-        
+
+        // Render one sharp-book cell. Bolds the book that was used to compute
+        // the true probability / EV (item.sharp_book) so it's clear which line
+        // drove the edge.
+        function sharpCell(item, book) {
+            const byBook = item.sharp_odds_by_book || {};
+            const entry = byBook[book];
+            if (!entry || entry.odds === null || entry.odds === undefined) {
+                return '<td style="color: #adb5bd;">—</td>';
+            }
+            const isRef = item.sharp_book === book;
+            const odds = formatOdds(entry.odds);
+            return isRef
+                ? `<td style="font-weight: 700;" title="Used for true-probability / EV">${odds}</td>`
+                : `<td>${odds}</td>`;
+        }
+
         function formatMarketKey(key) {
             const map = {
                 'h2h': 'ML',

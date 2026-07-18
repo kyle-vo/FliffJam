@@ -206,6 +206,112 @@ class EVCalculator:
         return results
 
 
+    def calculate_ev_multi(
+        self,
+        matched_multi: List[Dict],
+        sharp_pairs: List[Dict]
+    ) -> List[Dict]:
+        """
+        EV for multi-book matches. De-vigs against the sharpest available book
+        (SHARP_PRIORITY order) for the "true" probability, but carries every
+        matched book's price in `sharp_odds_by_book` for a side-by-side display.
+        """
+        from .matching import SHARP_PRIORITY
+
+        results = []
+
+        pair_lookup = {}
+        for pair in sharp_pairs:
+            key = (pair['bookmaker'], pair['player'], pair['market_key'], pair['line'])
+            pair_lookup[key] = pair
+
+        for matched in matched_multi:
+            target = matched.get('target', {})
+            sharps = matched.get('sharps', {})
+            if not target or not sharps:
+                continue
+
+            # Pick the sharpest book present for the true-probability reference
+            ref_book = next((b for b in SHARP_PRIORITY if b in sharps), None)
+            if ref_book is None:
+                ref_book = sorted(sharps.keys())[0]
+            ref = sharps[ref_book]
+
+            # Prices from every matched book, for display
+            sharp_odds_by_book = {
+                book: {
+                    'odds': m.get('american_odds'),
+                    'decimal': m.get('decimal_odds'),
+                    'line': m.get('line'),
+                }
+                for book, m in sharps.items()
+            }
+
+            # De-vig the reference book's own over/under pair
+            lookup_key = (ref_book, ref.get('player', ''), ref.get('market_key', ''), ref.get('line'))
+            sharp_pair = pair_lookup.get(lookup_key)
+
+            selection = target.get('selection', '').lower()
+            if sharp_pair:
+                vig_removed = self.remove_vig_multiplicative(
+                    sharp_pair['over']['decimal_odds'],
+                    sharp_pair['under']['decimal_odds']
+                )
+                if selection == 'over':
+                    true_prob = vig_removed['over_true_prob']
+                elif selection == 'under':
+                    true_prob = vig_removed['under_true_prob']
+                else:
+                    true_prob = self.decimal_to_implied_prob(ref.get('decimal_odds'))
+                vig = vig_removed['vig_removed']
+            else:
+                true_prob = self.decimal_to_implied_prob(ref.get('decimal_odds'))
+                vig = None
+
+            target_decimal = target.get('decimal_odds')
+            ev = self.calculate_ev(target_decimal, true_prob)
+
+            results.append({
+                'player': target.get('player', ''),
+                'event': target.get('event', ''),
+                'market_key': target.get('market_key', ''),
+                'selection': target.get('selection', ''),
+                'line': target.get('line'),
+                'sport': target.get('sport', ''),
+                'target_book': target.get('bookmaker', ''),
+                'target_odds': target.get('american_odds'),
+                'target_decimal': target_decimal,
+                'sharp_book': ref_book,           # book used for the EV/true prob
+                'sharp_odds': ref.get('american_odds'),
+                'sharp_decimal': ref.get('decimal_odds'),
+                'sharp_odds_by_book': sharp_odds_by_book,
+                'true_probability': true_prob,
+                'vig_removed': vig,
+                'ev': ev,
+                'ev_percent': ev * 100,
+                'match_score': matched.get('match_score', 0)
+            })
+
+        results.sort(key=lambda x: x['ev'], reverse=True)
+        positive = [r for r in results if r['ev'] > 0]
+        logger.info(f"Multi-book EV: {len(positive)} positive of {len(results)} total")
+        return results
+
+
+def calculate_ev_multi_from_data(
+    target_markets: List[Dict],
+    sharp_markets: List[Dict],
+    matched_multi: List[Dict]
+) -> List[Dict]:
+    """Convenience wrapper for the multi-book EV path."""
+    from .matching import MarketMatcher
+
+    calculator = EVCalculator()
+    matcher = MarketMatcher()
+    sharp_pairs = matcher.find_two_sided_pairs(sharp_markets)
+    return calculator.calculate_ev_multi(matched_multi, sharp_pairs)
+
+
 def calculate_ev_from_data(
     target_markets: List[Dict],
     sharp_markets: List[Dict],

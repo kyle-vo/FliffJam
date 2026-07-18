@@ -10,8 +10,8 @@ from flask import Flask, jsonify, render_template, send_file, Response, request
 from dotenv import load_dotenv
 
 from fetchers.odds_api import fetch_odds_data
-from utils.matching import match_markets
-from utils.ev_calculator import calculate_ev_from_data
+from utils.matching import match_markets, MarketMatcher
+from utils.ev_calculator import calculate_ev_from_data, calculate_ev_multi_from_data
 
 # Load environment variables
 load_dotenv()
@@ -82,22 +82,22 @@ def get_ev_opportunities():
         
         logger.info(f"Fetched {len(target_markets)} target markets and {len(sharp_markets)} sharp markets")
         
-        # Match markets
-        logger.info("Matching markets...")
-        matched = match_markets(target_markets, sharp_markets)
-        
+        # Match markets — multi-book: attach every sharp book per target line
+        logger.info("Matching markets (multi-book)...")
+        matched = MarketMatcher().match_markets_multi(target_markets, sharp_markets)
+
         if not matched:
             return jsonify({
                 'success': False,
                 'error': 'No matching markets found',
                 'opportunities': []
             }), 200
-        
+
         logger.info(f"Matched {len(matched)} markets")
-        
-        # Calculate EV
+
+        # Calculate EV (de-vigs against the sharpest available book)
         logger.info("Calculating EV...")
-        opportunities = calculate_ev_from_data(target_markets, sharp_markets, matched)
+        opportunities = calculate_ev_multi_from_data(target_markets, sharp_markets, matched)
         
         # Filter out spreads and alternate_spreads (they have dedicated tabs)
         opportunities = [opp for opp in opportunities if opp.get('market_key') not in ['spreads', 'alternate_spreads']]
