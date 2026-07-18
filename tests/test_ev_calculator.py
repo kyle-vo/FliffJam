@@ -100,7 +100,7 @@ class TestEVCalculator:
         calc = EVCalculator()
         
         matched_pair = {
-            'fliff': {
+            'target': {
                 'player': 'LeBron James',
                 'event': 'Lakers vs Warriors',
                 'market_key': 'player_points',
@@ -109,7 +109,7 @@ class TestEVCalculator:
                 'american_odds': -110,
                 'decimal_odds': 1.909
             },
-            'pinnacle': {
+            'sharp': {
                 'player': 'LeBron James',
                 'market_key': 'player_points',
                 'selection': 'Over',
@@ -125,8 +125,8 @@ class TestEVCalculator:
         assert result is not None
         assert result['player'] == 'LeBron James'
         assert result['line'] == 25.5
-        assert result['fliff_odds'] == -110
-        assert result['pinnacle_odds'] == -105
+        assert result['target_odds'] == -110
+        assert result['sharp_odds'] == -105
         assert result['match_score'] == 95.5
 
 

@@ -78,88 +78,99 @@ class EVCalculator:
     def process_matched_market(self, matched_pair: Dict) -> Optional[Dict]:
         """
         Process a matched market pair to calculate EV.
-        
+
         Args:
-            matched_pair: Dict with 'fliff' and 'pinnacle' markets
-        
+            matched_pair: Dict with 'target' and 'sharp' markets
+
         Returns:
             {
                 'player': 'LeBron James',
                 'market_key': 'player_points',
                 'selection': 'Over',
                 'line': 25.5,
-                'fliff_odds': -110,
-                'fliff_decimal': 1.909,
-                'pinnacle_odds': -105,
-                'pinnacle_decimal': 1.952,
+                'target_book': 'kalshi',
+                'target_odds': -110,
+                'target_decimal': 1.909,
+                'sharp_book': 'pinnacle',
+                'sharp_odds': -105,
+                'sharp_decimal': 1.952,
                 'true_probability': 0.52,
                 'ev': 0.0087,
                 'ev_percent': 0.87
             }
         """
-        fliff = matched_pair.get('fliff', {})
-        pinnacle = matched_pair.get('pinnacle', {})
-        
-        if not fliff or not pinnacle:
+        target = matched_pair.get('target', {})
+        sharp = matched_pair.get('sharp', {})
+
+        if not target or not sharp:
             return None
-        
+
         return {
-            'player': fliff.get('player', ''),
-            'event': fliff.get('event', ''),
-            'market_key': fliff.get('market_key', ''),
-            'selection': fliff.get('selection', ''),
-            'line': fliff.get('line'),
-            'fliff_odds': fliff.get('american_odds'),
-            'fliff_decimal': fliff.get('decimal_odds'),
-            'pinnacle_odds': pinnacle.get('american_odds'),
-            'pinnacle_decimal': pinnacle.get('decimal_odds'),
+            'player': target.get('player', ''),
+            'event': target.get('event', ''),
+            'market_key': target.get('market_key', ''),
+            'selection': target.get('selection', ''),
+            'line': target.get('line'),
+            'sport': target.get('sport', ''),
+            'target_book': target.get('bookmaker', ''),
+            'target_odds': target.get('american_odds'),
+            'target_decimal': target.get('decimal_odds'),
+            'sharp_book': sharp.get('bookmaker', ''),
+            'sharp_odds': sharp.get('american_odds'),
+            'sharp_decimal': sharp.get('decimal_odds'),
+            'sharp_line': sharp.get('line'),
             'match_score': matched_pair.get('match_score', 0)
         }
     
     def calculate_ev_with_pairs(
         self,
         matched_markets: List[Dict],
-        pinnacle_pairs: List[Dict]
+        sharp_pairs: List[Dict]
     ) -> List[Dict]:
         """
-        Calculate EV for matched markets using Pinnacle pairs for vig removal.
-        
+        Calculate EV for matched markets using sharp-book pairs for vig removal.
+
         Args:
-            matched_markets: List of matched Fliff/Pinnacle markets
-            pinnacle_pairs: List of Pinnacle over/under pairs
-        
+            matched_markets: List of matched target/sharp markets
+            sharp_pairs: List of sharp-book over/under pairs (per bookmaker)
+
         Returns:
             List of markets with EV calculations
         """
         results = []
-        
-        # Create lookup for Pinnacle pairs
+
+        # Create lookup for sharp pairs — keyed per bookmaker so vig removal
+        # always uses the same book the market was matched against
         pair_lookup = {}
-        for pair in pinnacle_pairs:
-            key = (pair['player'], pair['market_key'], pair['line'])
+        for pair in sharp_pairs:
+            key = (pair['bookmaker'], pair['player'], pair['market_key'], pair['line'])
             pair_lookup[key] = pair
-        
+
         for matched in matched_markets:
             processed = self.process_matched_market(matched)
             if not processed:
                 continue
-            
-            # Try to find corresponding Pinnacle pair for vig removal
+
+            # Look up the matched sharp book's own over/under pair. Use the
+            # sharp market's line (it can differ from the target line within
+            # tolerance) and its player spelling via the sharp market itself.
+            sharp_market = matched.get('sharp', {})
             lookup_key = (
-                processed['player'],
+                processed['sharp_book'],
+                sharp_market.get('player', processed['player']),
                 processed['market_key'],
-                processed['line']
+                sharp_market.get('line', processed['line'])
             )
-            
-            pinnacle_pair = pair_lookup.get(lookup_key)
-            
-            if pinnacle_pair:
+
+            sharp_pair = pair_lookup.get(lookup_key)
+
+            if sharp_pair:
                 # We have a two-sided market - remove vig
-                over_decimal = pinnacle_pair['over']['decimal_odds']
-                under_decimal = pinnacle_pair['under']['decimal_odds']
-                
+                over_decimal = sharp_pair['over']['decimal_odds']
+                under_decimal = sharp_pair['under']['decimal_odds']
+
                 vig_removed = self.remove_vig_multiplicative(over_decimal, under_decimal)
-                
+
                 # Determine which probability to use based on selection
                 selection = processed['selection'].lower()
                 if selection == 'over':
@@ -167,22 +178,22 @@ class EVCalculator:
                 elif selection == 'under':
                     true_prob = vig_removed['under_true_prob']
                 else:
-                    # Fallback to implied probability from Pinnacle
-                    true_prob = self.decimal_to_implied_prob(processed['pinnacle_decimal'])
-                
+                    # Fallback to implied probability from the sharp book
+                    true_prob = self.decimal_to_implied_prob(processed['sharp_decimal'])
+
                 processed['vig_removed'] = vig_removed['vig_removed']
             else:
-                # No pair found - use Pinnacle implied probability as-is
+                # No pair found - use sharp implied probability as-is
                 # This is less accurate but better than nothing
-                true_prob = self.decimal_to_implied_prob(processed['pinnacle_decimal'])
+                true_prob = self.decimal_to_implied_prob(processed['sharp_decimal'])
                 processed['vig_removed'] = None
                 logger.debug(f"No pair found for {processed['player']} {processed['market_key']}")
-            
+
             # Calculate EV
             processed['true_probability'] = true_prob
-            processed['ev'] = self.calculate_ev(processed['fliff_decimal'], true_prob)
+            processed['ev'] = self.calculate_ev(processed['target_decimal'], true_prob)
             processed['ev_percent'] = processed['ev'] * 100
-            
+
             results.append(processed)
         
         # Sort by EV descending
@@ -196,28 +207,28 @@ class EVCalculator:
 
 
 def calculate_ev_from_data(
-    fliff_markets: List[Dict],
-    pinnacle_markets: List[Dict],
+    target_markets: List[Dict],
+    sharp_markets: List[Dict],
     matched_markets: List[Dict]
 ) -> List[Dict]:
     """
     Convenience function to calculate EV from fetched data.
-    
+
     Args:
-        fliff_markets: Raw Fliff markets
-        pinnacle_markets: Raw Pinnacle markets  
+        target_markets: Raw target-book markets (kalshi, prizepicks)
+        sharp_markets: Raw sharp-book markets (pinnacle, draftkings, fanduel)
         matched_markets: Already matched market pairs
-    
+
     Returns:
         List of markets with EV calculations sorted by EV descending
     """
     from .matching import MarketMatcher
-    
+
     calculator = EVCalculator()
     matcher = MarketMatcher()
-    
-    # Find Pinnacle two-sided pairs for vig removal
-    pinnacle_pairs = matcher.find_two_sided_pairs(pinnacle_markets, 'pinnacle')
-    
+
+    # Find sharp-book two-sided pairs (per bookmaker) for vig removal
+    sharp_pairs = matcher.find_two_sided_pairs(sharp_markets)
+
     # Calculate EV
-    return calculator.calculate_ev_with_pairs(matched_markets, pinnacle_pairs)
+    return calculator.calculate_ev_with_pairs(matched_markets, sharp_pairs)

@@ -303,7 +303,7 @@
     <div class="container">
         <header>
             <h1>🎯 FliffJam</h1>
-            <p>Find positive expected value betting opportunities by comparing Fliff with Pinnacle</p>
+            <p>Find positive expected value betting opportunities by comparing Kalshi &amp; PrizePicks with sharp books (Pinnacle, DraftKings, FanDuel)</p>
         </header>
         
         <div class="nav-tabs">
@@ -413,7 +413,10 @@
             noData.style.display = 'none';
             
             container.innerHTML = filteredGames.map(game => {
-                const hasPinnacle = game.pinnacle_away && game.pinnacle_home;
+                const hasSharp = game.sharp_away && game.sharp_home;
+                const sharpBook = hasSharp && game.sharp_home.book
+                    ? game.sharp_home.book.charAt(0).toUpperCase() + game.sharp_home.book.slice(1)
+                    : 'Sharp book';
                 
                 return `
                     <div class="game-card">
@@ -424,21 +427,21 @@
                             </div>
                         </div>
                         <div class="game-body">
-                            ${hasPinnacle ? `
+                            ${hasSharp ? `
                             <div style="padding: 10px 15px;">
-                                <div class="bookmaker-label">Pinnacle</div>
+                                <div class="bookmaker-label">${sharpBook}</div>
                                 <div class="team-row">
                                     <div class="team-name team-left">${escapeHtml(game.away_team)}</div>
-                                    <span class="spread-line">${formatSpread(game.pinnacle_away.line)}</span>
-                                    <span class="spread-odds ${game.pinnacle_away.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.pinnacle_away.odds)}</span>
+                                    <span class="spread-line">${formatSpread(game.sharp_away.line)}</span>
+                                    <span class="spread-odds ${game.sharp_away.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.sharp_away.odds)}</span>
                                 </div>
                                 <div class="team-row">
                                     <div class="team-name team-left">${escapeHtml(game.home_team)}</div>
-                                    <span class="spread-line">${formatSpread(game.pinnacle_home.line)}</span>
-                                    <span class="spread-odds ${game.pinnacle_home.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.pinnacle_home.odds)}</span>
+                                    <span class="spread-line">${formatSpread(game.sharp_home.line)}</span>
+                                    <span class="spread-odds ${game.sharp_home.odds > 0 ? 'odds-positive' : 'odds-negative'}">${formatOdds(game.sharp_home.odds)}</span>
                                 </div>
                             </div>
-                            ` : '<div style="padding: 20px; text-align: center; color: #6c757d;">No Pinnacle data</div>'}
+                            ` : '<div style="padding: 20px; text-align: center; color: #6c757d;">No sharp book data</div>'}
                         </div>
                     </div>
                 `;

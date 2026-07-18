@@ -252,7 +252,7 @@
     <div class="container">
         <header>
             <h1>� FliffJam</h1>
-            <p>Find positive expected value betting opportunities by comparing Fliff with Pinnacle</p>
+            <p>Find positive expected value betting opportunities by comparing Kalshi &amp; PrizePicks with sharp books (Pinnacle, DraftKings, FanDuel)</p>
         </header>
         
         <div class="nav-tabs">
@@ -291,8 +291,8 @@
                             <th class="sort-header" onclick="sortTable('event')">Event</th>
                             <th class="sort-header" onclick="sortTable('selection')">Team</th>
                             <th class="sort-header" onclick="sortTable('line')">Line</th>
-                            <th class="sort-header" onclick="sortTable('fliff_odds')">Fliff Odds</th>
-                            <th class="sort-header" onclick="sortTable('pinnacle_odds')">Pinnacle Odds</th>
+                            <th class="sort-header" onclick="sortTable('target_odds')">My Book</th>
+                            <th class="sort-header" onclick="sortTable('sharp_odds')">Sharp Book</th>
                             <th class="sort-header" onclick="sortTable('value')">Value ▼</th>
                         </tr>
                     </thead>
@@ -423,9 +423,9 @@
                     const valueStr = value > 0 ? `+${value.toFixed(0)}` : value.toFixed(0);
                     
                     // Determine which odds are better
-                    const fliffBetter = value > 0;
-                    const fliffClass = fliffBetter ? 'odds-better' : 'odds-worse';
-                    const pinnacleClass = !fliffBetter ? 'odds-better' : 'odds-worse';
+                    const targetBetter = value > 0;
+                    const targetClass = targetBetter ? 'odds-better' : 'odds-worse';
+                    const sharpClass = !targetBetter ? 'odds-better' : 'odds-worse';
                     
                     return `
                         <tr>
@@ -433,8 +433,8 @@
                             <td>${opp.event || 'N/A'}</td>
                             <td>${opp.selection || 'N/A'}</td>
                             <td><strong>${opp.line !== null && opp.line !== undefined ? (opp.line > 0 ? '+' : '') + opp.line : 'N/A'}</strong></td>
-                            <td class="odds-cell ${fliffClass}">${formatOdds(opp.fliff_odds)}</td>
-                            <td class="odds-cell ${pinnacleClass}">${formatOdds(opp.pinnacle_odds)}</td>
+                            <td class="odds-cell ${targetClass}">${formatOdds(opp.target_odds)} <span style="color: #6c757d; font-size: 11px;">${opp.target_book || ''}</span></td>
+                            <td class="odds-cell ${sharpClass}">${formatOdds(opp.sharp_odds)} <span style="color: #6c757d; font-size: 11px;">${opp.sharp_book || ''}</span></td>
                             <td class="${valueClass}"><strong>${valueStr}</strong></td>
                         </tr>
                     `;

@@ -322,7 +322,7 @@
     <div class="container">
         <header>
             <h1>🎯 FliffJam</h1>
-            <p>Find positive expected value betting opportunities by comparing Fliff with Pinnacle</p>
+            <p>Find positive expected value betting opportunities by comparing Kalshi &amp; PrizePicks with sharp books (Pinnacle, DraftKings, FanDuel)</p>
         </header>
         
         <div class="nav-tabs">
@@ -343,12 +343,33 @@
                 <label for="maxEV">Max EV %:</label>
                 <input type="number" id="maxEV" value="100" step="0.1" onchange="applyFilters()" style="width: 80px;">
                 
+                <label for="sportFilter">Sport:</label>
+                <select id="sportFilter" onchange="applyFilters()">
+                    <option value="">All Sports</option>
+                    <option value="NBA">NBA</option>
+                    <option value="WNBA">WNBA</option>
+                    <option value="MLB">MLB</option>
+                    <option value="NFL">NFL</option>
+                </select>
+
                 <label for="marketFilter">Market Type:</label>
                 <select id="marketFilter" onchange="applyFilters()">
                     <option value="">All Markets</option>
-                    <option value="Points">Points</option>
-                    <option value="Rebounds">Rebounds</option>
-                    <option value="Assists">Assists</option>
+                    <optgroup label="Basketball">
+                        <option value="Points">Points</option>
+                        <option value="Rebounds">Rebounds</option>
+                        <option value="Assists">Assists</option>
+                    </optgroup>
+                    <optgroup label="Baseball">
+                        <option value="Hits">Hits</option>
+                        <option value="Home Runs">Home Runs</option>
+                        <option value="Strikeouts">Strikeouts</option>
+                        <option value="Total Bases">Total Bases</option>
+                        <option value="RBIs">RBIs</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                        <option value="Moneyline">Moneyline</option>
+                    </optgroup>
                 </select>
                 
                 <label style="margin-left: 20px;">
@@ -359,7 +380,7 @@
         </div>
         
         <div id="demoAlert" style="display: none; background: #fff3cd; border: 2px solid #ffc107; color: #856404; padding: 15px; margin: 20px 30px; border-radius: 6px;">
-            <strong>ℹ️ Demo Mode:</strong> Fliff is not available in TheOddsAPI. Showing sample data to demonstrate functionality. 
+            <strong>ℹ️ Demo Mode:</strong> No target-book data (Kalshi/PrizePicks) was returned from TheOddsAPI. Showing sample data to demonstrate functionality.
             The matching, vig removal, and EV calculation logic is fully functional and ready for use with real data.
         </div>
         
@@ -381,8 +402,8 @@
                         <th class="sortable" onclick="sortTable('market_key')">Type</th>
                         <th class="sortable" onclick="sortTable('line')">Line</th>
                         <th class="sortable" onclick="sortTable('selection')">Over/Under</th>
-                        <th class="sortable" onclick="sortTable('fliff_odds')">Fliff Odds</th>
-                        <th class="sortable" onclick="sortTable('pinnacle_odds')">Pinnacle Odds</th>
+                        <th class="sortable" onclick="sortTable('target_odds')">My Book</th>
+                        <th class="sortable" onclick="sortTable('sharp_odds')">Sharp Book</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
                         <th class="sortable" onclick="sortTable('value')">Value</th>
                     </tr>
@@ -485,24 +506,28 @@
         function applyFilters() {
             const minEV = parseFloat(document.getElementById('minEV').value) || 0;
             const maxEV = parseFloat(document.getElementById('maxEV').value) || 100;
+            const sportFilter = document.getElementById('sportFilter').value;
             const marketFilter = document.getElementById('marketFilter').value;
             const hideTracked = document.getElementById('hideTracked').checked;
             const tracked = getTrackedBets();
-            
+
             filteredData = allData.filter(item => {
                 // EV % filters
                 if (item.ev_percent < minEV) return false;
                 if (item.ev_percent > maxEV) return false;
-                
+
                 // Hide tracked filter
                 if (hideTracked && tracked[getBetId(item)]) return false;
-                
+
+                // Sport filter
+                if (sportFilter && item.sport !== sportFilter) return false;
+
                 // Market type filter
                 if (marketFilter && item.type !== marketFilter) return false;
-                
+
                 return true;
             });
-            
+
             renderTable();
         }
         
@@ -563,8 +588,8 @@
                         <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
                         <td>${item.selection || '-'}</td>
-                        <td><strong>${formatOdds(item.fliff_odds)}</strong></td>
-                        <td>${formatOdds(item.pinnacle_odds)}</td>
+                        <td><strong>${formatOdds(item.target_odds)}</strong> <span style="color: #6c757d; font-size: 11px;">${escapeHtml(item.target_book || '')}</span></td>
+                        <td>${formatOdds(item.sharp_odds)} <span style="color: #6c757d; font-size: 11px;">${escapeHtml(item.sharp_book || '')}</span></td>
                         <td>${(item.true_probability * 100).toFixed(1)}%</td>
                         <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
                             ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}
@@ -607,7 +632,12 @@
                 'player_assists': 'Assists',
                 'player_pass_tds': 'Pass TDs',
                 'player_pass_yds': 'Pass Yards',
-                'player_rush_yds': 'Rush Yards'
+                'player_rush_yds': 'Rush Yards',
+                'batter_hits': 'Hits',
+                'batter_home_runs': 'Home Runs',
+                'pitcher_strikeouts': 'Strikeouts',
+                'batter_total_bases': 'Total Bases',
+                'batter_rbis': 'RBIs'
             };
             return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }

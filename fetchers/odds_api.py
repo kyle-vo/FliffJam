@@ -1,5 +1,5 @@
 """
-TheOddsAPI fetcher for both Fliff and Pinnacle data.
+TheOddsAPI fetcher: target books (where you bet) vs sharp books (the reference).
 Fetches player props, normalizes the data, and provides caching.
 """
 import os
@@ -32,6 +32,13 @@ else:
 # Start with key #6 (index 5) since keys 1-5 are exhausted
 # This ensures NBA spreads are fetched successfully from the start
 current_key_index = 5 if len(API_KEYS) >= 6 else 0
+
+# Books you actually bet on (kalshi = exchange, prizepicks = DFS) vs the sharp
+# books whose de-vigged lines act as "true" probability. Priority order of
+# SHARP_BOOKMAKERS matters: matching prefers the first book that has the line.
+TARGET_BOOKMAKERS = [b.strip() for b in os.getenv('TARGET_BOOKMAKERS', 'kalshi,prizepicks').split(',') if b.strip()]
+SHARP_BOOKMAKERS = [b.strip() for b in os.getenv('SHARP_BOOKMAKERS', 'pinnacle,draftkings,fanduel').split(',') if b.strip()]
+ALL_BOOKMAKERS = TARGET_BOOKMAKERS + SHARP_BOOKMAKERS
 
 
 def load_cache() -> Dict:
@@ -264,90 +271,79 @@ class OddsAPIFetcher:
     
     def fetch_all_props(self, sports: List[str] = None) -> Dict[str, List[Dict]]:
         """
-        Fetch odds from Fliff and Pinnacle for NBA and NFL.
+        Fetch odds for target books (kalshi, prizepicks) and sharp books
+        (pinnacle, draftkings, fanduel) in a single request per market —
+        one combined call costs less API quota than per-book calls.
         Includes moneylines (h2h), spreads, and player props.
         NOTE: Does NOT include alternate_spreads to avoid timeout - use fetch_alternate_spreads() instead
-        
+
         Args:
             sports: List of sport keys. Defaults to NBA and NFL.
-        
+
         Returns:
             {
-                'fliff': [normalized_markets],
-                'pinnacle': [normalized_markets]
+                'target': [normalized_markets],   # kalshi + prizepicks
+                'sharp': [normalized_markets]     # pinnacle + draftkings + fanduel
             }
         """
         # Check if we have cached data from file
         cached_data = load_cache()
-        if cached_data:
+        if cached_data and 'target' in cached_data:
             logger.info("📦 Using cached data (avoiding API calls)")
             return cached_data
-        
+
         if sports is None:
-            # Only NBA and NFL per user preference
-            sports = ['basketball_nba', 'americanfootball_nfl']
+            sports = ['basketball_nba', 'basketball_wnba', 'baseball_mlb', 'americanfootball_nfl']
+
+        target_markets = []
+        sharp_markets = []
+        bookmakers_param = ','.join(ALL_BOOKMAKERS)
+
+        def split_by_side(event_data: Dict):
+            """Normalize every bookmaker in an event and route to target/sharp."""
+            for bookmaker in event_data.get('bookmakers', []):
+                key = bookmaker.get('key', '')
+                normalized = self.normalize_market(event_data, bookmaker)
+                for m in normalized:
+                    m['sport'] = event_data.get('_sport', '')
+                if key in TARGET_BOOKMAKERS:
+                    target_markets.extend(normalized)
+                elif key in SHARP_BOOKMAKERS:
+                    sharp_markets.extend(normalized)
         
-        fliff_markets = []
-        pinnacle_markets = []
-        
-        # Markets to fetch - spreads needed for Spreads View page
-        game_markets = ['spreads']
+        # Markets to fetch - spreads for the Spreads View page, h2h (moneyline)
+        # because Kalshi is an exchange that mostly trades game winners
+        game_markets = ['h2h', 'spreads']
         
         # Player props require event-specific endpoint (includes alternate_spreads)
         player_markets = {
-            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists', 'alternate_spreads']
+            'basketball_nba': ['player_points', 'player_rebounds', 'player_assists', 'alternate_spreads'],
+            'basketball_wnba': ['player_points', 'player_rebounds', 'player_assists'],
+            'baseball_mlb': ['batter_hits', 'batter_home_runs', 'pitcher_strikeouts', 'batter_total_bases', 'batter_rbis']
         }
         
         for sport in sports:
-            # Fetch game markets (h2h, spreads)
+            # Fetch game markets (h2h, spreads) — one call covers all books
             for market in game_markets:
-                # Fetch Fliff data
                 try:
-                    logger.info(f"Fetching Fliff {market} for {sport}...")
-                    fliff_events = self.get_odds(
+                    logger.info(f"Fetching {market} for {sport} ({bookmakers_param})...")
+                    events = self.get_odds(
                         sport=sport,
                         regions='us',
                         markets=market,
-                        bookmakers='fliff'
+                        bookmakers=bookmakers_param
                     )
-                    
-                    if fliff_events:
-                        for event in fliff_events:
-                            for bookmaker in event.get('bookmakers', []):
-                                if bookmaker['key'] == 'fliff':
-                                    normalized = self.normalize_market(event, bookmaker)
-                                    fliff_markets.extend(normalized)
-                        logger.info(f"  ✅ Got {len(fliff_events)} events")
+
+                    if events:
+                        for event in events:
+                            event['_sport'] = sport
+                            split_by_side(event)
+                        logger.info(f"  ✅ Got {len(events)} events")
                     else:
-                        logger.warning(f"  ⚠️ No Fliff data for {market}")
-                        
+                        logger.warning(f"  ⚠️ No data for {market}")
+
                 except Exception as e:
-                    logger.error(f"  ❌ Error fetching Fliff {market}: {e}")
-                
-                # Fetch Pinnacle data
-                try:
-                    logger.info(f"Fetching Pinnacle {market} for {sport}...")
-                    sharp_events = self.get_odds(
-                        sport=sport,
-                        regions='us',
-                        markets=market,
-                        bookmakers='pinnacle'
-                    )
-                    
-                    # Skip fallback bookmakers to reduce API calls (saves ~70 calls per refresh)
-                    # User specifically wants Pinnacle odds only for accurate comparison
-                    
-                    if sharp_events:
-                        for event in sharp_events:
-                            for bookmaker in event.get('bookmakers', []):
-                                normalized = self.normalize_market(event, bookmaker)
-                                pinnacle_markets.extend(normalized)
-                        logger.info(f"  ✅ Got {len(sharp_events)} events")
-                    else:
-                        logger.warning(f"  ⚠️ No sharp book data for {market}")
-                        
-                except Exception as e:
-                    logger.error(f"  ❌ Error fetching sharp book {market}: {e}")
+                    logger.error(f"  ❌ Error fetching {market}: {e}")
             
             # Fetch player props and alternate spreads (event-specific endpoint)
             # Only fetch for NBA - NFL player props and alt spreads removed to save ~64 API calls
@@ -375,79 +371,57 @@ class OddsAPIFetcher:
                     
                     logger.info(f"  Found {len(upcoming_events)} upcoming events (filtered out {len(events) - len(upcoming_events)} live/past games)")
                     
-                    # Fetch all upcoming events
+                    # Fetch all upcoming events — one call per event covers all books
                     for event in upcoming_events:
                         event_id = event.get('id')
                         event_name = f"{event.get('home_team')} vs {event.get('away_team')}"
-                        
+
                         # Build markets string
                         markets_str = ','.join(markets_to_fetch)
-                        
-                        # Fetch Fliff event data
+
                         try:
-                            logger.info(f"  Fetching Fliff player props for {event_name}...")
-                            fliff_event_data = self.get_event_odds(
+                            logger.info(f"  Fetching player props for {event_name}...")
+                            event_data = self.get_event_odds(
                                 sport=sport,
                                 event_id=event_id,
                                 regions='us',
                                 markets=markets_str,
-                                bookmakers='fliff'
+                                bookmakers=bookmakers_param
                             )
-                            
-                            if fliff_event_data and fliff_event_data.get('bookmakers'):
-                                for bookmaker in fliff_event_data['bookmakers']:
-                                    if bookmaker['key'] == 'fliff':
-                                        normalized = self.normalize_market(fliff_event_data, bookmaker)
-                                        fliff_markets.extend(normalized)
-                                        logger.info(f"    ✅ Got {len(normalized)} player props")
-                            
+
+                            if event_data and event_data.get('bookmakers'):
+                                event_data['_sport'] = sport
+                                before = len(target_markets)
+                                split_by_side(event_data)
+                                logger.info(f"    ✅ Got {len(target_markets) - before} target-book props")
+
                         except Exception as e:
-                            logger.warning(f"    ⚠️ No Fliff player props: {e}")
-                        
-                        # Fetch Pinnacle player props
-                        try:
-                            sharp_event_data = self.get_event_odds(
-                                sport=sport,
-                                event_id=event_id,
-                                regions='us',
-                                markets=markets_str,
-                                bookmakers='pinnacle'
-                            )
-                            
-                            # Skip fallback bookmakers to reduce API calls (saves ~70 calls per refresh)
-                            # User specifically wants Pinnacle odds only for accurate comparison
-                            
-                            if sharp_event_data and sharp_event_data.get('bookmakers'):
-                                for bookmaker in sharp_event_data['bookmakers']:
-                                    normalized = self.normalize_market(sharp_event_data, bookmaker)
-                                    pinnacle_markets.extend(normalized)
-                            
-                        except Exception as e:
-                            logger.warning(f"    ⚠️ No sharp event data: {e}")
-                
+                            logger.warning(f"    ⚠️ No event data: {e}")
+
                 except Exception as e:
                     logger.error(f"  ❌ Error fetching events: {e}")
-        
-        logger.info(f"📊 REAL DATA LOADED - {len(fliff_markets)} Fliff markets, {len(pinnacle_markets)} sharp book markets")
-        
-        if not fliff_markets:
-            logger.warning("No Fliff data found - falling back to demo")
+
+        logger.info(f"📊 REAL DATA LOADED - {len(target_markets)} target markets ({'/'.join(TARGET_BOOKMAKERS)}), {len(sharp_markets)} sharp markets ({'/'.join(SHARP_BOOKMAKERS)})")
+
+        if not target_markets:
+            logger.warning("No target-book data found - falling back to demo")
             return self._get_demo_data()
-        
+
         result = {
-            'fliff': fliff_markets,
-            'pinnacle': pinnacle_markets
+            'target': target_markets,
+            'sharp': sharp_markets
         }
-        
+
         # Save to persistent file cache
         save_cache(result)
-        
+
         return result
     
     def _get_demo_data(self) -> Dict[str, List[Dict]]:
         """
         Return demo data with NBA/NFL moneylines, spreads, and player props.
-        Demonstrates Fliff vs Pinnacle comparison with realistic +EV opportunities.
+        Demonstrates target-book (kalshi) vs sharp (pinnacle) comparison with
+        realistic +EV opportunities.
         """
         # Pinnacle (sharp book) odds - NBA and NFL
         pinnacle_markets = [
@@ -679,11 +653,11 @@ class OddsAPIFetcher:
             },
         ]
         
-        # Fliff (recreational book) - with strategic +EV opportunities
+        # Target book (soft/recreational side) - with strategic +EV opportunities
         fliff_markets = []
         for m in pinnacle_markets:
             fliff_m = m.copy()
-            fliff_m['bookmaker'] = 'fliff'
+            fliff_m['bookmaker'] = TARGET_BOOKMAKERS[0] if TARGET_BOOKMAKERS else 'kalshi'
             
             # Create realistic +EV situations on select markets
             # NBA Props +EV
@@ -729,11 +703,11 @@ class OddsAPIFetcher:
             fliff_markets.append(fliff_m)
         
         logger.info("📊 DEMO DATA LOADED - This is sample data to demonstrate the app")
-        logger.info("   To use real data: Fliff must be available in TheOddsAPI")
-        
+        logger.info(f"   To use real data: {'/'.join(TARGET_BOOKMAKERS)} must return data from TheOddsAPI")
+
         return {
-            'fliff': fliff_markets,
-            'pinnacle': pinnacle_markets
+            'target': fliff_markets,
+            'sharp': pinnacle_markets
         }
 
 
