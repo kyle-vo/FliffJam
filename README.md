@@ -1,10 +1,12 @@
-# 🎯 Fliff +EV Finder
+# 🎯 FliffJam — +EV Finder
 
-A Python Flask application that identifies positive expected value (+EV) betting opportunities by comparing odds from Fliff with sharp bookmaker Pinnacle (via TheOddsAPI). The app fetches player prop markets, matches them using fuzzy logic, removes vig from two-sided markets, and calculates true probabilities to find profitable betting edges.
+A Python Flask application that identifies positive expected value (+EV) betting opportunities by comparing the odds you can bet (**Kalshi**, **PrizePicks**) against sharp bookmakers (**Pinnacle**, **DraftKings**, **FanDuel**) via TheOddsAPI. The app fetches moneyline, spread, and player-prop markets, matches them using fuzzy logic, removes vig from the sharp side, and calculates true probabilities to find profitable betting edges.
+
+**Configurable books** — set `TARGET_BOOKMAKERS` (books you bet on) and `SHARP_BOOKMAKERS` (the reference) in your environment; they default to `kalshi,prizepicks` and `pinnacle,draftkings,fanduel`. When several sharp books carry a line, the sharpest available (Pinnacle first) is used.
 
 ## 🌟 Features
 
-- **Automated Data Fetching**: Pulls real-time odds from both Fliff and Pinnacle via TheOddsAPI
+- **Automated Data Fetching**: Pulls real-time odds for all configured books in a single API call per market via TheOddsAPI
 - **Intelligent Market Matching**: Uses fuzzy string matching to pair equivalent markets across bookmakers
 - **Vig Removal**: Removes bookmaker margins from two-sided markets to calculate true probabilities
 - **EV Calculation**: Computes expected value for each bet opportunity
@@ -117,8 +119,10 @@ Fetch all EV opportunities as JSON.
       "market_key": "player_points",
       "selection": "Over",
       "line": 25.5,
-      "fliff_odds": -110,
-      "pinnacle_odds": -105,
+      "target_book": "kalshi",
+      "target_odds": -110,
+      "sharp_book": "pinnacle",
+      "sharp_odds": -105,
       "true_probability": 0.52,
       "ev": 0.0087,
       "ev_percent": 0.87,
@@ -137,7 +141,7 @@ Health check endpoint.
 ## 🧮 How It Works
 
 ### 1. Data Collection
-- Fetches player prop odds from both Fliff and Pinnacle via TheOddsAPI
+- Fetches moneyline, spread, and player-prop odds for every configured book via TheOddsAPI
 - Supports major sports: NBA, NFL, MLB, NHL
 - Covers common prop markets: points, rebounds, assists, touchdowns, etc.
 
@@ -153,7 +157,7 @@ Health check endpoint.
 
 ### 4. EV Calculation
 ```
-EV = (Fliff_Decimal_Odds × True_Probability) - 1.0
+EV = (Target_Book_Decimal_Odds × True_Probability) - 1.0
 ```
 
 Positive EV indicates a profitable betting opportunity.
@@ -183,6 +187,8 @@ python -m pytest tests/test_matching.py -v
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ODDS_API_KEY` | Yes | - | Your TheOddsAPI key |
+| `TARGET_BOOKMAKERS` | No | `kalshi,prizepicks` | Comma-separated books you bet on |
+| `SHARP_BOOKMAKERS` | No | `pinnacle,draftkings,fanduel` | Sharp reference books, in priority order |
 | `FLASK_ENV` | No | `development` | Flask environment |
 | `FLASK_DEBUG` | No | `True` | Enable debug mode |
 | `CACHE_TTL` | No | `300` | Cache time-to-live in seconds |
@@ -210,30 +216,24 @@ TheOddsAPI has rate limits based on your plan. This app implements:
 
 - **Caching**: 5-minute TTL by default to minimize API calls
 - **Request Tracking**: Logs remaining API requests in console
-- **Efficient Fetching**: Fetches both bookmakers in single requests
+- **Efficient Fetching**: Fetches all configured books in a single request per market
 
 ## ⚠️ Important Notes
 
-### **Fliff Availability in TheOddsAPI**
+### **Target-book quirks (Kalshi & PrizePicks)**
 
-**UPDATE**: Fliff may not be available as a bookmaker in TheOddsAPI depending on your region and API plan. The current implementation:
+The two target books behave differently from a traditional sportsbook, which affects how their "EV" should be read:
 
-- **Attempts to use available bookmakers** (DraftKings, FanDuel, BetMGM, etc.)
-- **Falls back to demo data** if no real data is available
-- **Demonstrates the EV calculation methodology** even without Fliff
+- **PrizePicks** is a DFS app: standard picks are offered at fixed default odds rather than a true per-pick price, so its EV really measures *line value* versus the sharp consensus. Its demon/goblin variants come through TheOddsAPI as `_alternate` markets.
+- **Kalshi** is a low-liquidity prediction exchange trading mostly on game winners (moneylines). A displayed edge may reflect a thin or stale quote that has moved by the time you act — verify before betting.
 
-**Options to get real Fliff data**:
-1. Check if your TheOddsAPI plan includes Fliff
-2. Implement a web scraper for Fliff (requires their approval)
-3. Use the demo data to understand the concept, then manually input Fliff odds
-
-The core logic (matching, vig removal, EV calculation) works with any bookmaker pair.
+If a target book returns no data (season/region/plan dependent), the app falls back to demo data so the matching, vig-removal, and EV logic can still be demonstrated. The core logic works with any bookmaker set — change `TARGET_BOOKMAKERS` / `SHARP_BOOKMAKERS` to compare other books.
 
 ### Legal & Ethical Considerations
 
 - **Know Your Jurisdiction**: Sports betting laws vary by location. Ensure you're legally permitted to place sports bets in your area.
 - **Responsible Gambling**: This tool identifies mathematical edges but doesn't guarantee profits. Never bet more than you can afford to lose.
-- **Terms of Service**: Respect Fliff's and Pinnacle's terms of service. This app uses public APIs and should not be used for unauthorized activities.
+- **Terms of Service**: Respect each book's terms of service. This app uses public APIs and should not be used for unauthorized activities.
 
 ### Technical Limitations
 
