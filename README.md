@@ -218,6 +218,16 @@ TheOddsAPI has rate limits based on your plan. This app implements:
 - **Request Tracking**: Logs remaining API requests in console
 - **Efficient Fetching**: Fetches all configured books in a single request per market
 
+## 🚀 Deployment
+
+Deployed on [Render](https://render.com) via the included `render.yaml` blueprint. To deploy your own:
+
+1. Push this repo to your GitHub, then in Render: **New → Blueprint** and select it.
+2. Set `ODDS_API_KEY` (or `ODDS_API_KEYS` for rotation) in the dashboard.
+3. Optionally override `TARGET_BOOKMAKERS` / `SHARP_BOOKMAKERS` to compare different books.
+
+Render redeploys automatically on every push to `main`.
+
 ## ⚠️ Important Notes
 
 ### **Target-book quirks (Kalshi & PrizePicks)**
