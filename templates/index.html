@@ -333,6 +333,8 @@
         <div class="controls">
             <div class="filter-group">
                 <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
+                <button class="btn btn-secondary" onclick="toggleSlips()">🎟️ 2-Man Slips</button>
+                <span id="dataAge" style="color: #6c757d; font-size: 0.9em;"></span>
             </div>
             
             <div class="filter-group">
@@ -395,7 +397,15 @@
         </div>
         
         <div id="error" class="error" style="display: none;"></div>
-        
+
+        <div id="slipsPanel" style="display: none; padding: 20px 30px; background: #f0f4ff; border-bottom: 2px solid #667eea;">
+            <h3 style="margin-bottom: 5px;">🎟️ Best 2-Man PrizePicks Slips (Power Play, 3x payout)</h3>
+            <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
+                Legs paired from different games only. Breakeven: 57.7% per leg (33.3% combined). Slip EV = 3 × P(both hit) − 1.
+            </p>
+            <div id="slipsList"></div>
+        </div>
+
         <div id="tableContainer" style="display: none; overflow-x: auto;">
             <table id="dataTable">
                 <thead>
@@ -403,6 +413,7 @@
                         <th style="width: 50px;">Tracked</th>
                         <th class="sortable" onclick="sortTable('sport')">Sport</th>
                         <th class="sortable" onclick="sortTable('event')">Event</th>
+                        <th class="sortable" onclick="sortTable('commence_time')">Starts</th>
                         <th class="sortable" onclick="sortTable('player')">Player</th>
                         <th class="sortable" onclick="sortTable('market_key')">Type</th>
                         <th class="sortable" onclick="sortTable('line')">Line</th>
@@ -430,11 +441,38 @@
         let filteredData = [];
         let sortColumn = 'value';
         let sortDirection = 'desc';
-        
+        let fetchedAt = null;
+
+        // PrizePicks 2-pick Power Play: 3x payout → each leg must hit 57.7%
+        const PP_BREAKEVEN = Math.sqrt(1 / 3);
+
         // Load data on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadData();
+            setInterval(updateDataAge, 60000);  // tick the age display every minute
         });
+
+        function updateDataAge() {
+            const el = document.getElementById('dataAge');
+            if (!fetchedAt) { el.textContent = ''; return; }
+            const mins = Math.floor((Date.now() / 1000 - fetchedAt) / 60);
+            const label = mins < 1 ? 'just now'
+                : mins < 60 ? `${mins}m ago`
+                : `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+            el.textContent = `📡 Data fetched ${label}`;
+            el.style.color = mins > 45 ? '#dc3545' : '#6c757d';
+        }
+
+        function formatStartsIn(commenceTime) {
+            if (!commenceTime) return '-';
+            const start = new Date(commenceTime);
+            if (isNaN(start)) return '-';
+            const diffMin = Math.round((start - Date.now()) / 60000);
+            if (diffMin < 0) return '<span style="color:#dc3545;font-weight:600;">LIVE</span>';
+            if (diffMin < 60) return `<span style="color:#fd7e14;font-weight:600;">${diffMin}m</span>`;
+            if (diffMin < 24 * 60) return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
+            return `${Math.floor(diffMin / 1440)}d ${Math.floor((diffMin % 1440) / 60)}h`;
+        }
         
         async function loadData() {
             const loading = document.getElementById('loading');
@@ -456,7 +494,9 @@
                 }
                 
                 allData = data.opportunities || [];
-                
+                fetchedAt = data.fetched_at || null;
+                updateDataAge();
+
                 // Show demo alert if we have demo data
                 const demoAlert = document.getElementById('demoAlert');
                 if (allData.length > 0 && allData[0].event && allData[0].event.includes('Lakers')) {
@@ -467,7 +507,12 @@
                 
                 // Apply filters and render
                 applyFilters();
-                
+
+                // Refresh slips panel if it's open
+                if (document.getElementById('slipsPanel').style.display !== 'none') {
+                    renderSlips();
+                }
+
                 loading.style.display = 'none';
                 
                 if (filteredData.length === 0) {
@@ -504,10 +549,43 @@
             if (tracked[betId]) {
                 delete tracked[betId];
             } else {
-                tracked[betId] = Date.now();
+                // Snapshot odds at track time so we can measure line movement (CLV)
+                const item = allData.find(i => getBetId(i) === betId);
+                tracked[betId] = {
+                    ts: Date.now(),
+                    target_odds: item ? item.target_odds : null,
+                    sharp_odds: item ? item.sharp_odds : null,
+                    true_prob: item ? item.true_probability : null
+                };
             }
             saveTrackedBets(tracked);
             renderTable();
+        }
+
+        // Line movement since tracking, in unified odds-scale points.
+        // Positive = the sharp line moved toward your side (you beat the move).
+        function clvInfo(item, trackedEntry) {
+            if (!trackedEntry || typeof trackedEntry !== 'object') return null;  // legacy format
+            const then = trackedEntry.sharp_odds;
+            const now = item.sharp_odds;
+            if (then === null || then === undefined || now === null || now === undefined) return null;
+            const delta = oddsToScale(then) - oddsToScale(now);
+            return { then, now, delta };
+        }
+
+        function oddsToScale(americanOdds) {
+            return americanOdds < 0 ? americanOdds + 100 : americanOdds - 100;
+        }
+
+        // Max disagreement between sharp books on this line, in scale points
+        function sharpSpread(item) {
+            const byBook = item.sharp_odds_by_book || {};
+            const vals = Object.values(byBook)
+                .map(e => e && e.odds)
+                .filter(o => o !== null && o !== undefined)
+                .map(oddsToScale);
+            if (vals.length < 2) return 0;
+            return Math.max(...vals) - Math.min(...vals);
         }
         
         function applyFilters() {
@@ -584,21 +662,43 @@
                 // Determine sport
                 const sport = item.sport || 'NBA';
                 
-                // Get tracked status
+                // Get tracked status + CLV since tracking
                 const betId = getBetId(item);
                 const tracked = getTrackedBets();
                 const isTracked = tracked[betId];
-                
+                const clv = isTracked ? clvInfo(item, tracked[betId]) : null;
+                const clvHtml = clv && clv.delta !== 0
+                    ? `<div style="font-size:10px; font-weight:600; color:${clv.delta > 0 ? '#28a745' : '#dc3545'};"
+                           title="Sharp line was ${formatOdds(clv.then)} when tracked, now ${formatOdds(clv.now)}">
+                           CLV ${clv.delta > 0 ? '+' : ''}${clv.delta.toFixed(0)}</div>`
+                    : '';
+
+                // PrizePicks breakeven badge (2-pick Power: needs 57.7% per leg)
+                const isPP = (item.target_book || '').toLowerCase() === 'prizepicks';
+                const ppBadge = isPP
+                    ? (item.true_probability >= PP_BREAKEVEN
+                        ? ' <span class="badge badge-success" title="Above 57.7% PrizePicks 2-pick breakeven">PP ✓</span>'
+                        : ' <span class="badge" style="background:#e9ecef;color:#6c757d;" title="Below 57.7% PrizePicks 2-pick breakeven">PP ✗</span>')
+                    : '';
+
+                // Sharp books disagreeing with each other = unstable/mismatched line
+                const spread = sharpSpread(item);
+                const warnHtml = spread > 40
+                    ? ` <span title="Sharp books disagree by ${spread.toFixed(0)} points on this line — verify before betting" style="cursor:help;">⚠️</span>`
+                    : '';
+
                 return `
                     <tr class="${evClass}">
                         <td style="text-align: center;">
-                            <input type="checkbox" 
-                                   ${isTracked ? 'checked' : ''} 
+                            <input type="checkbox"
+                                   ${isTracked ? 'checked' : ''}
                                    onchange="toggleTracked('${betId}')"
                                    style="cursor: pointer; width: 18px; height: 18px;">
+                            ${clvHtml}
                         </td>
                         <td><span class="badge badge-primary">${sport}</span></td>
                         <td>${escapeHtml(item.event)}</td>
+                        <td>${formatStartsIn(item.commence_time)}</td>
                         <td><strong>${escapeHtml(item.player)}</strong></td>
                         <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
@@ -607,9 +707,9 @@
                         ${sharpCell(item, 'pinnacle')}
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
-                        <td>${(item.true_probability * 100).toFixed(1)}%</td>
+                        <td>${(item.true_probability * 100).toFixed(1)}%${ppBadge}</td>
                         <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
-                            ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}
+                            ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}${warnHtml}
                         </td>
                     </tr>
                 `;
@@ -680,6 +780,84 @@
             return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }
         
+        function toggleSlips() {
+            const panel = document.getElementById('slipsPanel');
+            const show = panel.style.display === 'none';
+            panel.style.display = show ? 'block' : 'none';
+            if (show) renderSlips();
+        }
+
+        function renderSlips() {
+            const list = document.getElementById('slipsList');
+
+            // Candidate legs: PrizePicks picks only, upcoming games, one best pick per player+market
+            const now = Date.now();
+            const candidates = allData.filter(i =>
+                (i.target_book || '').toLowerCase() === 'prizepicks' &&
+                i.true_probability !== null && i.true_probability !== undefined &&
+                (!i.commence_time || new Date(i.commence_time) > now)
+            );
+
+            const bestPerPlayer = {};
+            for (const c of candidates) {
+                const key = `${c.player}_${c.market_key}`;
+                if (!bestPerPlayer[key] || c.true_probability > bestPerPlayer[key].true_probability) {
+                    bestPerPlayer[key] = c;
+                }
+            }
+            // Top legs by true probability
+            const legs = Object.values(bestPerPlayer)
+                .sort((a, b) => b.true_probability - a.true_probability)
+                .slice(0, 15);
+
+            if (legs.length < 2) {
+                list.innerHTML = '<p style="color:#6c757d;">Not enough PrizePicks picks available to build slips. (Slips need at least 2 PP legs from different games.)</p>';
+                return;
+            }
+
+            // All cross-game pairs (correlation guard: never two legs from the same event)
+            const slips = [];
+            for (let a = 0; a < legs.length; a++) {
+                for (let b = a + 1; b < legs.length; b++) {
+                    if (legs[a].event === legs[b].event) continue;
+                    const combined = legs[a].true_probability * legs[b].true_probability;
+                    slips.push({ legs: [legs[a], legs[b]], combined, ev: 3 * combined - 1 });
+                }
+            }
+            slips.sort((x, y) => y.ev - x.ev);
+            const top = slips.slice(0, 10);
+
+            if (top.length === 0) {
+                list.innerHTML = '<p style="color:#6c757d;">No valid cross-game pairs found.</p>';
+                return;
+            }
+
+            const legHtml = (l) => `
+                <div style="padding: 4px 0;">
+                    <strong>${escapeHtml(l.player)}</strong>
+                    ${l.selection || ''} ${l.line !== null ? l.line : ''} ${formatMarketKey(l.market_key)}
+                    <span style="color:#6c757d; font-size: 0.85em;">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
+                </div>`;
+
+            list.innerHTML = top.map((s, idx) => `
+                <div style="background: white; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
+                            border-left: 4px solid ${s.ev > 0 ? '#28a745' : '#dc3545'};
+                            display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                    <div>
+                        <span style="color:#6c757d; font-size:0.85em;">#${idx + 1}</span>
+                        ${legHtml(s.legs[0])}
+                        ${legHtml(s.legs[1])}
+                    </div>
+                    <div style="text-align: right; white-space: nowrap;">
+                        <div style="font-size: 1.3em; font-weight: bold;" class="${s.ev > 0 ? 'ev-positive' : 'ev-negative'}">
+                            ${s.ev > 0 ? '+' : ''}${(s.ev * 100).toFixed(1)}% EV
+                        </div>
+                        <div style="color:#6c757d; font-size: 0.85em;">${(s.combined * 100).toFixed(1)}% both hit</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;

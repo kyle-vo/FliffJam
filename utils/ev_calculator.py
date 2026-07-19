@@ -274,6 +274,7 @@ class EVCalculator:
             results.append({
                 'player': target.get('player', ''),
                 'event': target.get('event', ''),
+                'commence_time': target.get('commence_time', ''),
                 'market_key': target.get('market_key', ''),
                 'selection': target.get('selection', ''),
                 'line': target.get('line'),

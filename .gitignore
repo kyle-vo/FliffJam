@@ -49,3 +49,6 @@ htmlcov/
 cache/
 *.cache
 cache_data.json
+
+# Claude Code local config
+.claude/

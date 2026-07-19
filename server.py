@@ -9,7 +9,7 @@ from io import StringIO
 from flask import Flask, jsonify, render_template, send_file, Response, request
 from dotenv import load_dotenv
 
-from fetchers.odds_api import fetch_odds_data
+from fetchers.odds_api import fetch_odds_data, CACHE_FILE
 from utils.matching import match_markets, MarketMatcher
 from utils.ev_calculator import calculate_ev_from_data, calculate_ev_multi_from_data
 
@@ -165,11 +165,22 @@ def get_ev_opportunities():
                     opp['sport'] = 'NBA'
         
         logger.info(f"Found {len(positive_ev)} positive EV opportunities out of {len(opportunities)} total")
-        
+
+        # When the data was actually fetched from the API (cache write time)
+        fetched_at = None
+        try:
+            import json as _json
+            if CACHE_FILE.exists():
+                with open(CACHE_FILE, 'r') as f:
+                    fetched_at = _json.load(f).get('timestamp')
+        except Exception:
+            pass
+
         return jsonify({
             'success': True,
             'count': len(opportunities),
             'positive_ev_count': len(positive_ev),
+            'fetched_at': fetched_at,
             'opportunities': opportunities
         })
     
