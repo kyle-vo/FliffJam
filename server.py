@@ -95,6 +95,21 @@ def get_ev_opportunities():
         
         # Filter out spreads (they have a dedicated tab)
         opportunities = [opp for opp in opportunities if opp.get('market_key') != 'spreads']
+
+        # Filter out live/already-started games
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+
+        def is_upcoming(opp):
+            ct = opp.get('commence_time', '')
+            if not ct:
+                return True
+            try:
+                return datetime.fromisoformat(ct.replace('Z', '+00:00')) > now
+            except (ValueError, TypeError):
+                return True
+
+        opportunities = [opp for opp in opportunities if is_upcoming(opp)]
         
         # Calculate value (odds difference on unified scale)
         # Scale: -∞, ..., -200, -105, -100/+100 (0), +105, +200, ..., +∞

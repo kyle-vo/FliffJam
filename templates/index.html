@@ -4,325 +4,355 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FliffJam - Player Props</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg: #0b0e16;
+            --surface: #12172308;
+            --panel: #141a28;
+            --panel-2: #1a2133;
+            --border: #232d42;
+            --text: #e6eaf2;
+            --muted: #8b94a7;
+            --accent: #f5a623;
+            --accent-dim: #f5a62315;
+            --green: #2ee06f;
+            --green-dim: #2ee06f12;
+            --red: #ff5c5c;
+            --blue: #4d9fff;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #18213fff 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
-            padding: 20px;
         }
-        
+
         .container {
-            max-width: 1400px;
+            max-width: 1500px;
             margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
         }
-        
+
+        /* ---- Top bar ---- */
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 28px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
         }
-        
+
+        .logo-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
+            background: linear-gradient(135deg, var(--accent), #ff7a3d);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            flex-shrink: 0;
+        }
+
         header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+            font-size: 1.25em;
+            font-weight: 800;
+            letter-spacing: 0.5px;
         }
-        
+
+        header h1 span { color: var(--accent); }
+
         header p {
-            font-size: 1.1em;
-            opacity: 0.9;
+            font-size: 0.8em;
+            color: var(--muted);
+            margin-left: auto;
+            text-align: right;
         }
-        
+
+        /* ---- Nav ---- */
         .nav-tabs {
             display: flex;
-            background: #f8f9fa;
-            border-bottom: 2px solid #dee2e6;
+            gap: 4px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            padding: 0 28px;
         }
-        
+
         .nav-tab {
-            flex: 1;
-            padding: 15px;
-            text-align: center;
+            padding: 12px 22px;
             background: none;
             border: none;
-            font-size: 1.1em;
+            border-bottom: 2px solid transparent;
+            font-family: inherit;
+            font-size: 0.9em;
             font-weight: 600;
-            color: #6c757d;
+            color: var(--muted);
             cursor: pointer;
-            transition: all 0.3s;
             text-decoration: none;
             display: block;
+            transition: color 0.15s;
         }
-        
-        .nav-tab:hover {
-            background: #e9ecef;
-        }
-        
+
+        .nav-tab:hover { color: var(--text); }
+
         .nav-tab.active {
-            color: #667eea;
-            background: white;
-            border-bottom: 3px solid #667eea;
+            color: var(--accent);
+            border-bottom-color: var(--accent);
         }
-        
+
+        /* ---- Controls ---- */
         .controls {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 30px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
+            padding: 14px 28px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 12px;
         }
-        
+
         .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            font-size: 1em;
+            padding: 9px 18px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.85em;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
             text-decoration: none;
             display: inline-block;
+            transition: all 0.15s;
         }
-        
+
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #14100a;
         }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
+
+        .btn-primary:hover { filter: brightness(1.1); }
+
         .btn-secondary {
-            background: #6c757d;
-            color: white;
+            background: var(--panel-2);
+            color: var(--text);
         }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        
+
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
         .filter-group {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
         }
-        
+
         .filter-group label {
-            font-weight: 600;
-            color: #495057;
+            font-weight: 500;
+            font-size: 0.82em;
+            color: var(--muted);
         }
-        
+
         .filter-group input,
         .filter-group select {
-            padding: 8px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 6px;
-            font-size: 1em;
+            padding: 7px 10px;
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            font-family: inherit;
+            font-size: 0.85em;
+            color: var(--text);
         }
-        
-        .stats {
-            display: flex;
-            justify-content: space-around;
-            padding: 20px 30px;
-            background: #e9ecef;
-            border-bottom: 1px solid #dee2e6;
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: var(--accent);
         }
-        
-        .stat-card {
-            text-align: center;
-        }
-        
-        .stat-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #667eea;
-        }
-        
-        .stat-label {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-        
+
+        .filter-group input[type="checkbox"] { accent-color: var(--accent); }
+
         .loading {
             text-align: center;
-            padding: 60px;
-            font-size: 1.2em;
-            color: #6c757d;
+            padding: 70px;
+            font-size: 1em;
+            color: var(--muted);
         }
-        
+
         .loading-spinner {
             display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--accent);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 18px;
         }
-        
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
+
         .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 20px;
-            margin: 20px 30px;
-            border-radius: 6px;
-            border: 1px solid #f5c6cb;
+            background: #ff5c5c14;
+            color: var(--red);
+            padding: 16px 20px;
+            margin: 20px 28px;
+            border-radius: 8px;
+            border: 1px solid #ff5c5c40;
+            font-size: 0.9em;
         }
-        
+
+        /* ---- Table ---- */
         table {
             width: 100%;
             border-collapse: collapse;
+            font-size: 0.87em;
         }
-        
+
         thead {
-            background: #f8f9fa;
             position: sticky;
             top: 0;
             z-index: 10;
         }
-        
+
         th {
-            padding: 15px;
+            padding: 11px 14px;
             text-align: left;
             font-weight: 600;
-            color: #495057;
-            border-bottom: 2px solid #dee2e6;
+            font-size: 0.78em;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--muted);
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
             cursor: pointer;
             user-select: none;
+            white-space: nowrap;
         }
-        
-        th:hover {
-            background: #e9ecef;
-        }
-        
-        th.sortable::after {
-            content: ' ⇅';
-            opacity: 0.3;
-        }
-        
-        th.sort-asc::after {
-            content: ' ↑';
-            opacity: 1;
-        }
-        
-        th.sort-desc::after {
-            content: ' ↓';
-            opacity: 1;
-        }
-        
+
+        th:hover { color: var(--text); }
+
+        th.sortable::after { content: ' ⇅'; opacity: 0.35; }
+        th.sort-asc::after { content: ' ↑'; opacity: 1; color: var(--accent); }
+        th.sort-desc::after { content: ' ↓'; opacity: 1; color: var(--accent); }
+
         td {
-            padding: 15px;
-            border-bottom: 1px solid #dee2e6;
+            padding: 11px 14px;
+            border-bottom: 1px solid #1a2133;
         }
-        
-        tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .positive-ev {
-            background: #d4edda !important;
-        }
-        
-        .high-ev {
-            background: #c3e6cb !important;
-            font-weight: bold;
-        }
-        
-        .ev-value {
-            font-weight: bold;
-        }
-        
-        .ev-positive {
-            color: #28a745;
-        }
-        
-        .ev-negative {
-            color: #dc3545;
-        }
-        
+
+        tbody tr { transition: background 0.1s; }
+        tbody tr:hover { background: var(--panel-2); }
+
+        .positive-ev { background: var(--green-dim); }
+        .positive-ev td:last-child { box-shadow: inset 3px 0 0 #2ee06f50; }
+
+        .high-ev { background: #2ee06f1f; }
+        .high-ev td:last-child { box-shadow: inset 3px 0 0 var(--green); }
+
+        .ev-value { font-weight: 700; }
+        .ev-positive { color: var(--green); }
+        .ev-negative { color: var(--red); }
+
         .badge {
             display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.78em;
             font-weight: 600;
         }
-        
-        .badge-success {
-            background: #28a745;
-            color: white;
+
+        .badge-primary {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            color: var(--muted);
         }
-        
-        .badge-info {
-            background: #17a2b8;
-            color: white;
-        }
-        
-        .badge-warning {
-            background: #ffc107;
-            color: #212529;
-        }
-        
+
+        .badge-success { background: #2ee06f22; color: var(--green); }
+        .badge-info { background: #4d9fff1f; color: var(--blue); }
+        .badge-warning { background: var(--accent-dim); color: var(--accent); }
+
         .no-data {
             text-align: center;
-            padding: 60px;
-            color: #6c757d;
-            font-size: 1.2em;
+            padding: 70px;
+            color: var(--muted);
+            font-size: 1em;
         }
-        
+
+        /* ---- Slips panel ---- */
+        #slipsPanel {
+            padding: 18px 28px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+
+        #slipsPanel h3 {
+            font-size: 1em;
+            font-weight: 700;
+            margin-bottom: 14px;
+        }
+
+        .slip-card {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slip-card.pos { border-left: 3px solid var(--green); }
+        .slip-card.neg { border-left: 3px solid var(--red); }
+
+        .slip-leg { padding: 3px 0; font-size: 0.9em; }
+        .slip-leg .meta { color: var(--muted); font-size: 0.85em; }
+
+        .slip-num { color: var(--muted); font-size: 0.8em; }
+
+        .slip-ev { text-align: right; white-space: nowrap; }
+        .slip-ev .big { font-size: 1.25em; font-weight: 800; }
+        .slip-ev .sub { color: var(--muted); font-size: 0.8em; }
+
         @media (max-width: 768px) {
-            header h1 {
-                font-size: 1.8em;
-            }
-            
+            header { flex-wrap: wrap; }
+            header p { margin-left: 0; text-align: left; }
+
             .controls {
                 flex-direction: column;
                 align-items: stretch;
             }
-            
+
             .filter-group {
                 flex-direction: column;
                 align-items: stretch;
             }
-            
-            table {
-                font-size: 0.9em;
-            }
-            
-            th, td {
-                padding: 10px;
-            }
+
+            table { font-size: 0.8em; }
+            th, td { padding: 8px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🎯 FliffJam</h1>
-            <p>Find positive expected value betting opportunities by comparing Kalshi &amp; PrizePicks with sharp books (Pinnacle, DraftKings, FanDuel)</p>
+            <div class="logo-mark">🎯</div>
+            <h1>FLIFF<span>JAM</span></h1>
+            <p>Kalshi &amp; PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
         </header>
         
         <div class="nav-tabs">
@@ -334,12 +364,12 @@
             <div class="filter-group">
                 <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
                 <button class="btn btn-secondary" onclick="toggleSlips()">🎟️ 2-Man Slips</button>
-                <span id="dataAge" style="color: #6c757d; font-size: 0.9em;"></span>
+                <span id="dataAge" style="color: var(--muted); font-size: 0.85em;"></span>
             </div>
             
             <div class="filter-group">
                 <label for="minOdds">Min Odds:</label>
-                <input type="number" id="minOdds" value="-400" step="5" onchange="applyFilters()" style="width: 80px;" title="Minimum My Book odds to show">
+                <input type="number" id="minOdds" value="-200" step="5" onchange="applyFilters()" style="width: 80px;" title="Minimum My Book odds to show">
 
                 <label for="maxOdds">Max Odds:</label>
                 <input type="number" id="maxOdds" value="200" step="5" onchange="applyFilters()" style="width: 80px;" title="Maximum My Book odds to show">
@@ -386,7 +416,7 @@
             </div>
         </div>
         
-        <div id="demoAlert" style="display: none; background: #fff3cd; border: 2px solid #ffc107; color: #856404; padding: 15px; margin: 20px 30px; border-radius: 6px;">
+        <div id="demoAlert" style="display: none; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); padding: 15px; margin: 20px 28px; border-radius: 8px; font-size: 0.9em;">
             <strong>ℹ️ Demo Mode:</strong> No target-book data (Kalshi/PrizePicks) was returned from TheOddsAPI. Showing sample data to demonstrate functionality.
             The matching, vig removal, and EV calculation logic is fully functional and ready for use with real data.
         </div>
@@ -398,11 +428,8 @@
         
         <div id="error" class="error" style="display: none;"></div>
 
-        <div id="slipsPanel" style="display: none; padding: 20px 30px; background: #f0f4ff; border-bottom: 2px solid #667eea;">
-            <h3 style="margin-bottom: 5px;">🎟️ Best 2-Man PrizePicks Slips (Power Play, 3x payout)</h3>
-            <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
-                Legs paired from different games only. Breakeven: 57.7% per leg (33.3% combined). Slip EV = 3 × P(both hit) − 1.
-            </p>
+        <div id="slipsPanel" style="display: none;">
+            <h3>🎟️ Best 2-Man PrizePicks Slips <span style="color: var(--muted); font-weight: 500;">(Power Play, 3x)</span></h3>
             <div id="slipsList"></div>
         </div>
 
@@ -460,7 +487,7 @@
                 : mins < 60 ? `${mins}m ago`
                 : `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
             el.textContent = `📡 Data fetched ${label}`;
-            el.style.color = mins > 45 ? '#dc3545' : '#6c757d';
+            el.style.color = mins > 45 ? 'var(--red)' : 'var(--muted)';
         }
 
         function formatStartsIn(commenceTime) {
@@ -668,7 +695,7 @@
                 const isTracked = tracked[betId];
                 const clv = isTracked ? clvInfo(item, tracked[betId]) : null;
                 const clvHtml = clv && clv.delta !== 0
-                    ? `<div style="font-size:10px; font-weight:600; color:${clv.delta > 0 ? '#28a745' : '#dc3545'};"
+                    ? `<div style="font-size:10px; font-weight:600; color:${clv.delta > 0 ? 'var(--green)' : 'var(--red)'};"
                            title="Sharp line was ${formatOdds(clv.then)} when tracked, now ${formatOdds(clv.now)}">
                            CLV ${clv.delta > 0 ? '+' : ''}${clv.delta.toFixed(0)}</div>`
                     : '';
@@ -678,7 +705,7 @@
                 const ppBadge = isPP
                     ? (item.true_probability >= PP_BREAKEVEN
                         ? ' <span class="badge badge-success" title="Above 57.7% PrizePicks 2-pick breakeven">PP ✓</span>'
-                        : ' <span class="badge" style="background:#e9ecef;color:#6c757d;" title="Below 57.7% PrizePicks 2-pick breakeven">PP ✗</span>')
+                        : ' <span class="badge badge-primary" title="Below 57.7% PrizePicks 2-pick breakeven">PP ✗</span>')
                     : '';
 
                 // Sharp books disagreeing with each other = unstable/mismatched line
@@ -703,7 +730,7 @@
                         <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
                         <td>${item.selection || '-'}</td>
-                        <td><strong>${formatOdds(item.target_odds)}</strong> <span style="color: #6c757d; font-size: 11px;">${escapeHtml(item.target_book || '')}</span></td>
+                        <td><strong>${formatOdds(item.target_odds)}</strong> <span style="color: var(--muted); font-size: 11px;">${escapeHtml(item.target_book || '')}</span></td>
                         ${sharpCell(item, 'pinnacle')}
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
@@ -748,7 +775,7 @@
             const byBook = item.sharp_odds_by_book || {};
             const entry = byBook[book];
             if (!entry || entry.odds === null || entry.odds === undefined) {
-                return '<td style="color: #adb5bd;">—</td>';
+                return '<td style="color: var(--muted); opacity: 0.5;">—</td>';
             }
             const isRef = item.sharp_book === book;
             const odds = formatOdds(entry.odds);
@@ -811,7 +838,7 @@
                 .slice(0, 15);
 
             if (legs.length < 2) {
-                list.innerHTML = '<p style="color:#6c757d;">Not enough PrizePicks picks available to build slips. (Slips need at least 2 PP legs from different games.)</p>';
+                list.innerHTML = '<p style="color:var(--muted);">Not enough PrizePicks picks available to build slips. (Slips need at least 2 PP legs from different games.)</p>';
                 return;
             }
 
@@ -828,31 +855,29 @@
             const top = slips.slice(0, 10);
 
             if (top.length === 0) {
-                list.innerHTML = '<p style="color:#6c757d;">No valid cross-game pairs found.</p>';
+                list.innerHTML = '<p style="color:var(--muted);">No valid cross-game pairs found.</p>';
                 return;
             }
 
             const legHtml = (l) => `
-                <div style="padding: 4px 0;">
+                <div class="slip-leg">
                     <strong>${escapeHtml(l.player)}</strong>
                     ${l.selection || ''} ${l.line !== null ? l.line : ''} ${formatMarketKey(l.market_key)}
-                    <span style="color:#6c757d; font-size: 0.85em;">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
+                    <span class="meta">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
                 </div>`;
 
             list.innerHTML = top.map((s, idx) => `
-                <div style="background: white; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
-                            border-left: 4px solid ${s.ev > 0 ? '#28a745' : '#dc3545'};
-                            display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                <div class="slip-card ${s.ev > 0 ? 'pos' : 'neg'}">
                     <div>
-                        <span style="color:#6c757d; font-size:0.85em;">#${idx + 1}</span>
+                        <span class="slip-num">#${idx + 1}</span>
                         ${legHtml(s.legs[0])}
                         ${legHtml(s.legs[1])}
                     </div>
-                    <div style="text-align: right; white-space: nowrap;">
-                        <div style="font-size: 1.3em; font-weight: bold;" class="${s.ev > 0 ? 'ev-positive' : 'ev-negative'}">
+                    <div class="slip-ev">
+                        <div class="big ${s.ev > 0 ? 'ev-positive' : 'ev-negative'}">
                             ${s.ev > 0 ? '+' : ''}${(s.ev * 100).toFixed(1)}% EV
                         </div>
-                        <div style="color:#6c757d; font-size: 0.85em;">${(s.combined * 100).toFixed(1)}% both hit</div>
+                        <div class="sub">${(s.combined * 100).toFixed(1)}% both hit</div>
                     </div>
                 </div>
             `).join('');
