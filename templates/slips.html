@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FliffJam - Slip Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-mark">🎯</div>
+            <h1>FLIFF<span>JAM</span></h1>
+            <p>Kalshi &amp; PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+        </header>
+
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab">🏀 Player Props</a>
+            <a href="/spreads" class="nav-tab">📊 Spreads View</a>
+            <a href="/slips" class="nav-tab active">🎟️ Slip Builder</a>
+            <a href="/results" class="nav-tab">📈 Results</a>
+        </div>
+
+        <div class="controls">
+            <div class="filter-group">
+                <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
+                <span id="dataAge" style="color: var(--muted); font-size: 0.85em;"></span>
+            </div>
+            <div class="filter-group">
+                <span style="color: var(--muted); font-size: 0.82em;">
+                    PrizePicks legs from de-vigged sharp consensus · cross-game guarded · +EV slips only
+                </span>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Building slips...</div>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="slipsContent" style="display: none; padding: 10px 28px 30px;"></div>
+
+        <div id="noData" class="no-data" style="display: none;">
+            No positive-EV slips on the current board. That's the tool protecting your bankroll — check back after lines refresh.
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let fetchedAt = null;
+
+        // PrizePicks breakevens / payouts
+        const FLEX6_PAYOUTS = { 6: 25, 5: 2, 4: 0.4 };
+
+        window.addEventListener('DOMContentLoaded', loadData);
+        setInterval(updateDataAge, 60000);
+
+        function updateDataAge() {
+            const el = document.getElementById('dataAge');
+            if (!fetchedAt) { el.textContent = ''; return; }
+            const mins = Math.floor((Date.now() / 1000 - fetchedAt) / 60);
+            const label = mins < 1 ? 'just now'
+                : mins < 60 ? `${mins}m ago`
+                : `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+            el.textContent = `📡 Data fetched ${label}`;
+            el.style.color = mins > 45 ? 'var(--red)' : 'var(--muted)';
+        }
+
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const content = document.getElementById('slipsContent');
+            const noData = document.getElementById('noData');
+
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            content.style.display = 'none';
+            noData.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/ev');
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Failed to fetch data');
+
+                allData = data.opportunities || [];
+                fetchedAt = data.fetched_at || null;
+                updateDataAge();
+
+                loading.style.display = 'none';
+                renderSlips();
+            } catch (err) {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+                error.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        function oddsToScale(americanOdds) {
+            return americanOdds < 0 ? americanOdds + 100 : americanOdds - 100;
+        }
+
+        function sharpSpread(item) {
+            const byBook = item.sharp_odds_by_book || {};
+            const vals = Object.values(byBook)
+                .map(e => e && e.odds)
+                .filter(o => o !== null && o !== undefined)
+                .map(oddsToScale);
+            if (vals.length < 2) return 0;
+            return Math.max(...vals) - Math.min(...vals);
+        }
+
+        function slipLegPool() {
+            const now = Date.now();
+            const base = allData.filter(i =>
+                (i.target_book || '').toLowerCase() === 'prizepicks' &&
+                i.true_probability !== null && i.true_probability !== undefined &&
+                (!i.commence_time || new Date(i.commence_time) > now)
+            );
+            let candidates = base.filter(i => sharpSpread(i) <= 40);
+            if (candidates.length < 6) candidates = base;
+
+            const bestPerPlayer = {};
+            for (const c of candidates) {
+                const key = `${c.player}_${c.market_key}`;
+                if (!bestPerPlayer[key] || c.true_probability > bestPerPlayer[key].true_probability) {
+                    bestPerPlayer[key] = c;
+                }
+            }
+            return Object.values(bestPerPlayer)
+                .sort((a, b) => b.true_probability - a.true_probability);
+        }
+
+        // Greedy 6-flex from a pool: max 2 legs/game, one square per player.
+        function buildSixFlex(pool) {
+            const chosen = [];
+            const perEvent = {};
+            const usedPlayers = new Set();
+            for (const l of pool) {
+                if ((perEvent[l.event] || 0) >= 2) continue;
+                if (usedPlayers.has(l.player)) continue;
+                chosen.push(l);
+                usedPlayers.add(l.player);
+                perEvent[l.event] = (perEvent[l.event] || 0) + 1;
+                if (chosen.length === 6) break;
+            }
+            if (chosen.length < 6) return null;
+
+            // dp[k] = P(exactly k legs hit) — Poisson-binomial
+            let dp = [1];
+            for (const l of chosen) {
+                const p = l.true_probability;
+                const next = new Array(dp.length + 1).fill(0);
+                for (let k = 0; k < dp.length; k++) {
+                    next[k] += dp[k] * (1 - p);
+                    next[k + 1] += dp[k] * p;
+                }
+                dp = next;
+            }
+            let ev = -1;
+            for (const [hits, mult] of Object.entries(FLEX6_PAYOUTS)) {
+                ev += dp[parseInt(hits)] * mult;
+            }
+            return { legs: chosen, dp, ev };
+        }
+
+        function formatMarketKey(key) {
+            const map = {
+                'h2h': 'ML', 'player_points': 'Points', 'player_rebounds': 'Rebounds',
+                'player_assists': 'Assists', 'player_points_assists': 'Pts + Ast',
+                'player_points_rebounds': 'Pts + Reb',
+                'pitcher_strikeouts': 'Strikeouts', 'batter_total_bases': 'Total Bases'
+            };
+            return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        const legHtml = (l) => `
+            <div class="slip-leg">
+                <strong>${escapeHtml(l.player)}</strong>
+                ${l.selection || ''} ${l.line !== null ? l.line : ''} ${formatMarketKey(l.market_key)}
+                <span class="meta">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
+            </div>`;
+
+        function renderSlips() {
+            const content = document.getElementById('slipsContent');
+            const noData = document.getElementById('noData');
+            const pool = slipLegPool();
+
+            let html = '';
+
+            // ---- Top 6-man flexes: disjoint slips, +EV only, up to 3 ----
+            const flexes = [];
+            let remaining = [...pool];
+            for (let n = 0; n < 3; n++) {
+                const flex = buildSixFlex(remaining);
+                if (!flex || flex.ev <= 0) break;
+                flexes.push(flex);
+                const used = new Set(flex.legs.map(l => `${l.player}_${l.market_key}`));
+                remaining = remaining.filter(l => !used.has(`${l.player}_${l.market_key}`));
+            }
+
+            if (flexes.length > 0) {
+                html += '<div class="section-label">Best 6-Man Flex (25x / 2x / 0.4x)</div>';
+                html += flexes.map((f, idx) => `
+                    <div class="slip-card pos">
+                        <div>
+                            <span class="slip-num">#${idx + 1}</span>
+                            ${f.legs.map(legHtml).join('')}
+                        </div>
+                        <div class="slip-ev">
+                            <div class="big ev-positive">+${(f.ev * 100).toFixed(1)}% EV</div>
+                            <div class="sub">6/6: ${(f.dp[6] * 100).toFixed(1)}% · 5/6: ${(f.dp[5] * 100).toFixed(1)}% · 4/6: ${(f.dp[4] * 100).toFixed(1)}%</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // ---- Top 2-man powers: +EV only, up to 5 ----
+            const legs = pool.slice(0, 15);
+            const pairs = [];
+            for (let a = 0; a < legs.length; a++) {
+                for (let b = a + 1; b < legs.length; b++) {
+                    if (legs[a].event === legs[b].event) continue;
+                    if (legs[a].player === legs[b].player) continue;
+                    const combined = legs[a].true_probability * legs[b].true_probability;
+                    const ev = 3 * combined - 1;
+                    if (ev > 0) pairs.push({ legs: [legs[a], legs[b]], combined, ev });
+                }
+            }
+            pairs.sort((x, y) => y.ev - x.ev);
+            const topPairs = pairs.slice(0, 5);
+
+            if (topPairs.length > 0) {
+                html += '<div class="section-label">Top 2-Man Power (3x)</div>';
+                html += topPairs.map((s, idx) => `
+                    <div class="slip-card pos">
+                        <div>
+                            <span class="slip-num">#${idx + 1}</span>
+                            ${legHtml(s.legs[0])}
+                            ${legHtml(s.legs[1])}
+                        </div>
+                        <div class="slip-ev">
+                            <div class="big ev-positive">+${(s.ev * 100).toFixed(1)}% EV</div>
+                            <div class="sub">${(s.combined * 100).toFixed(1)}% both hit</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            if (!html) {
+                noData.style.display = 'block';
+                content.style.display = 'none';
+                return;
+            }
+
+            content.innerHTML = html;
+            content.style.display = 'block';
+            noData.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FliffJam - Results</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-mark">🎯</div>
+            <h1>FLIFF<span>JAM</span></h1>
+            <p>Kalshi &amp; PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+        </header>
+
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab">🏀 Player Props</a>
+            <a href="/spreads" class="nav-tab">📊 Spreads View</a>
+            <a href="/slips" class="nav-tab">🎟️ Slip Builder</a>
+            <a href="/results" class="nav-tab active">📈 Results</a>
+        </div>
+
+        <div class="controls">
+            <div class="filter-group">
+                <button class="btn btn-primary" onclick="loadData()">🔄 Refresh CLV</button>
+                <span style="color: var(--muted); font-size: 0.82em;">
+                    Track bets on the Player Props tab · mark Win/Loss here after games settle
+                </span>
+            </div>
+        </div>
+
+        <div id="statRow" class="stat-row" style="display: none;"></div>
+
+        <div id="tableContainer" style="display: none; overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tracked</th>
+                        <th>Bet</th>
+                        <th>Book</th>
+                        <th>My Odds</th>
+                        <th>Sharp @ Track</th>
+                        <th>Sharp Now</th>
+                        <th>CLV</th>
+                        <th>Pred. Prob</th>
+                        <th>Result</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="noData" class="no-data" style="display: none;">
+            No tracked bets yet. Check the "Tracked" box on the Player Props tab when you place a bet — it snapshots the odds so this page can grade your closing-line value.
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+
+        window.addEventListener('DOMContentLoaded', loadData);
+
+        function getTrackedBets() {
+            const tracked = localStorage.getItem('trackedBets');
+            return tracked ? JSON.parse(tracked) : {};
+        }
+
+        function saveTrackedBets(tracked) {
+            localStorage.setItem('trackedBets', JSON.stringify(tracked));
+        }
+
+        function getBetId(item) {
+            return `${item.event}_${item.player}_${item.market_key}_${item.line}_${item.selection}`;
+        }
+
+        function oddsToScale(americanOdds) {
+            return americanOdds < 0 ? americanOdds + 100 : americanOdds - 100;
+        }
+
+        function formatOdds(odds) {
+            if (odds === null || odds === undefined) return '—';
+            return odds > 0 ? `+${odds}` : `${odds}`;
+        }
+
+        async function loadData() {
+            // Current board is only needed for live CLV; tracked list renders
+            // even if the fetch fails.
+            try {
+                const response = await fetch('/api/ev');
+                const data = await response.json();
+                allData = data.success ? (data.opportunities || []) : [];
+            } catch (e) {
+                allData = [];
+            }
+            render();
+        }
+
+        function setOutcome(betId, outcome) {
+            const tracked = getTrackedBets();
+            const entry = tracked[betId];
+            if (!entry || typeof entry !== 'object') return;
+            entry.outcome = entry.outcome === outcome ? null : outcome;  // click again to unset
+            saveTrackedBets(tracked);
+            render();
+        }
+
+        function removeBet(betId) {
+            const tracked = getTrackedBets();
+            delete tracked[betId];
+            saveTrackedBets(tracked);
+            render();
+        }
+
+        function render() {
+            const tracked = getTrackedBets();
+            const ids = Object.keys(tracked);
+            const statRow = document.getElementById('statRow');
+            const tableContainer = document.getElementById('tableContainer');
+            const noData = document.getElementById('noData');
+
+            if (ids.length === 0) {
+                statRow.style.display = 'none';
+                tableContainer.style.display = 'none';
+                noData.style.display = 'block';
+                return;
+            }
+
+            // Index current board by betId for live sharp odds
+            const current = {};
+            for (const item of allData) current[getBetId(item)] = item;
+
+            const rows = [];
+            let wins = 0, losses = 0, clvSum = 0, clvCount = 0, probSum = 0, probCount = 0;
+
+            // Newest first
+            ids.sort((a, b) => {
+                const ta = typeof tracked[a] === 'object' ? tracked[a].ts : tracked[a];
+                const tb = typeof tracked[b] === 'object' ? tracked[b].ts : tracked[b];
+                return tb - ta;
+            });
+
+            for (const betId of ids) {
+                const e = tracked[betId];
+                const isObj = typeof e === 'object' && e !== null;
+                const live = current[betId];
+
+                const label = isObj && e.player
+                    ? `<strong>${escapeHtml(e.player)}</strong> ${e.selection || ''} ${e.line ?? ''} ${e.type || ''}<div style="color:var(--muted);font-size:0.85em;">${escapeHtml(e.event || '')}</div>`
+                    : `<span style="color:var(--muted);font-size:0.85em;">${escapeHtml(betId)}</span>`;
+
+                const sharpThen = isObj ? e.sharp_odds : null;
+                const sharpNow = live ? live.sharp_odds : null;
+                let clv = null;
+                if (sharpThen !== null && sharpThen !== undefined && sharpNow !== null && sharpNow !== undefined) {
+                    clv = oddsToScale(sharpThen) - oddsToScale(sharpNow);
+                    clvSum += clv; clvCount++;
+                }
+                if (isObj && e.true_prob) { probSum += e.true_prob; probCount++; }
+
+                const outcome = isObj ? e.outcome : null;
+                if (outcome === 'win') wins++;
+                if (outcome === 'loss') losses++;
+
+                const when = isObj ? new Date(e.ts).toLocaleDateString('en-US', {month:'numeric', day:'numeric'}) : '';
+
+                rows.push(`
+                    <tr>
+                        <td style="color:var(--muted); white-space:nowrap;">${when}</td>
+                        <td>${label}</td>
+                        <td><span class="badge badge-primary">${isObj && e.book ? escapeHtml(e.book) : '?'}</span></td>
+                        <td>${formatOdds(isObj ? e.target_odds : null)}</td>
+                        <td>${formatOdds(sharpThen)}</td>
+                        <td>${formatOdds(sharpNow)}${!live ? ' <span style="color:var(--muted);font-size:0.8em;" title="Not on the current board (game started or line pulled)">off board</span>' : ''}</td>
+                        <td class="${clv !== null ? (clv > 0 ? 'ev-positive' : clv < 0 ? 'ev-negative' : '') : ''}" style="font-weight:700;">
+                            ${clv !== null ? (clv > 0 ? '+' : '') + clv.toFixed(0) : '—'}
+                        </td>
+                        <td>${isObj && e.true_prob ? (e.true_prob * 100).toFixed(1) + '%' : '—'}</td>
+                        <td style="white-space:nowrap;">
+                            <button class="btn btn-secondary" style="padding:4px 10px; ${outcome==='win' ? 'border-color:var(--green);color:var(--green);' : ''}" onclick="setOutcome('${escapeAttr(betId)}','win')">W</button>
+                            <button class="btn btn-secondary" style="padding:4px 10px; ${outcome==='loss' ? 'border-color:var(--red);color:var(--red);' : ''}" onclick="setOutcome('${escapeAttr(betId)}','loss')">L</button>
+                        </td>
+                        <td><button class="btn btn-secondary" style="padding:4px 10px;" title="Remove from tracking" onclick="removeBet('${escapeAttr(betId)}')">✕</button></td>
+                    </tr>
+                `);
+            }
+
+            // Summary stats
+            const settled = wins + losses;
+            const hitRate = settled > 0 ? (wins / settled * 100) : null;
+            const avgClv = clvCount > 0 ? clvSum / clvCount : null;
+            const predRate = probCount > 0 ? (probSum / probCount * 100) : null;
+
+            statRow.innerHTML = `
+                <div class="stat-card"><div class="value">${ids.length}</div><div class="label">Tracked</div></div>
+                <div class="stat-card"><div class="value">${wins}–${losses}</div><div class="label">Record</div></div>
+                <div class="stat-card"><div class="value">${hitRate !== null ? hitRate.toFixed(0) + '%' : '—'}</div><div class="label">Hit Rate</div></div>
+                <div class="stat-card"><div class="value">${predRate !== null ? predRate.toFixed(1) + '%' : '—'}</div><div class="label">Predicted Rate</div></div>
+                <div class="stat-card"><div class="value ${avgClv !== null && avgClv !== 0 ? (avgClv > 0 ? 'ev-positive' : 'ev-negative') : ''}">${avgClv !== null ? (avgClv > 0 ? '+' : '') + avgClv.toFixed(1) : '—'}</div><div class="label">Avg CLV</div></div>
+            `;
+
+            statRow.style.display = 'grid';
+            document.getElementById('tableBody').innerHTML = rows.join('');
+            tableContainer.style.display = 'block';
+            noData.style.display = 'none';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text ?? '';
+            return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+    </script>
+</body>
+</html>

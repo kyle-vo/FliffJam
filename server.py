@@ -38,6 +38,18 @@ def spreads():
     return render_template('spreads.html')
 
 
+@app.route('/slips')
+def slips():
+    """Serve the slip builder page."""
+    return render_template('slips.html')
+
+
+@app.route('/results')
+def results():
+    """Serve the tracked-bets results page."""
+    return render_template('results.html')
+
+
 @app.route('/api/ev')
 def get_ev_opportunities():
     """
