@@ -183,8 +183,63 @@
             return div.innerHTML;
         }
 
+        // ---- Slip tracking (shared with Results page via localStorage) ----
+        let renderedFlexes = [];
+        let renderedPairs = [];
+
+        function getTrackedSlips() {
+            const t = localStorage.getItem('trackedSlips');
+            return t ? JSON.parse(t) : {};
+        }
+
+        function saveTrackedSlips(t) {
+            localStorage.setItem('trackedSlips', JSON.stringify(t));
+        }
+
+        function slipId(kind, legs) {
+            return kind + '|' + legs
+                .map(l => `${l.player}_${l.market_key}_${l.line}_${l.selection}`)
+                .sort()
+                .join('|');
+        }
+
+        function toggleSlipTrack(kind, idx) {
+            const slip = kind === 'flex' ? renderedFlexes[idx] : renderedPairs[idx];
+            if (!slip) return;
+            const id = slipId(kind, slip.legs);
+            const tracked = getTrackedSlips();
+            if (tracked[id]) {
+                delete tracked[id];
+            } else {
+                tracked[id] = {
+                    ts: Date.now(),
+                    kind: kind === 'flex' ? '6-flex' : '2-power',
+                    ev: slip.ev,
+                    legs: slip.legs.map(l => ({
+                        player: l.player,
+                        selection: l.selection,
+                        line: l.line,
+                        type: formatMarketKey(l.market_key),
+                        event: l.event,
+                        sport: l.sport || '',
+                        prob: l.true_probability
+                    })),
+                    outcome: null
+                };
+            }
+            saveTrackedSlips(tracked);
+            renderSlips();  // refresh button states
+        }
+
+        function trackBtn(kind, idx, legs) {
+            const isTracked = !!getTrackedSlips()[slipId(kind, legs)];
+            return `<button class="btn btn-secondary" style="padding:5px 12px; margin-top:6px; ${isTracked ? 'border-color:var(--green); color:var(--green);' : ''}"
+                onclick="toggleSlipTrack('${kind}', ${idx})">${isTracked ? '✓ Tracked' : '+ Track'}</button>`;
+        }
+
         const legHtml = (l) => `
             <div class="slip-leg">
+                <span class="badge badge-primary" style="margin-right:4px;">${escapeHtml(l.sport || '')}</span>
                 <strong>${escapeHtml(l.player)}</strong>
                 ${l.selection || ''} ${l.line !== null ? l.line : ''} ${formatMarketKey(l.market_key)}
                 <span class="meta">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
@@ -208,6 +263,7 @@
                 remaining = remaining.filter(l => !used.has(`${l.player}_${l.market_key}`));
             }
 
+            renderedFlexes = flexes;
             if (flexes.length > 0) {
                 html += '<div class="section-label">Best 6-Man Flex (25x / 2x / 0.4x)</div>';
                 html += flexes.map((f, idx) => `
@@ -219,6 +275,7 @@
                         <div class="slip-ev">
                             <div class="big ev-positive">+${(f.ev * 100).toFixed(1)}% EV</div>
                             <div class="sub">6/6: ${(f.dp[6] * 100).toFixed(1)}% · 5/6: ${(f.dp[5] * 100).toFixed(1)}% · 4/6: ${(f.dp[4] * 100).toFixed(1)}%</div>
+                            ${trackBtn('flex', idx, f.legs)}
                         </div>
                     </div>
                 `).join('');
@@ -239,6 +296,7 @@
             pairs.sort((x, y) => y.ev - x.ev);
             const topPairs = pairs.slice(0, 5);
 
+            renderedPairs = topPairs;
             if (topPairs.length > 0) {
                 html += '<div class="section-label">Top 2-Man Power (3x)</div>';
                 html += topPairs.map((s, idx) => `
@@ -251,6 +309,7 @@
                         <div class="slip-ev">
                             <div class="big ev-positive">+${(s.ev * 100).toFixed(1)}% EV</div>
                             <div class="sub">${(s.combined * 100).toFixed(1)}% both hit</div>
+                            ${trackBtn('pair', idx, s.legs)}
                         </div>
                     </div>
                 `).join('');

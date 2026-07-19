@@ -57,6 +57,11 @@
         <div id="noData" class="no-data" style="display: none;">
             No tracked bets yet. Check the "Tracked" box on the Player Props tab when you place a bet — it snapshots the odds so this page can grade your closing-line value.
         </div>
+
+        <div id="slipsSection" style="display: none; padding: 10px 28px 30px;">
+            <div class="section-label" id="slipsHeader">Tracked Slips</div>
+            <div id="slipsList"></div>
+        </div>
     </div>
 
     <script>
@@ -115,6 +120,100 @@
             render();
         }
 
+        // ---- Tracked slips (written by the Slip Builder page) ----
+        // Payout multipliers by graded outcome
+        const SLIP_PAYOUTS = {
+            '6-flex': { '6': 25, '5': 2, '4': 0.4, '0': 0 },
+            '2-power': { 'w': 3, 'l': 0 }
+        };
+
+        function getTrackedSlips() {
+            const t = localStorage.getItem('trackedSlips');
+            return t ? JSON.parse(t) : {};
+        }
+
+        function saveTrackedSlips(t) {
+            localStorage.setItem('trackedSlips', JSON.stringify(t));
+        }
+
+        function setSlipOutcome(id, outcome) {
+            const tracked = getTrackedSlips();
+            const entry = tracked[id];
+            if (!entry) return;
+            entry.outcome = entry.outcome === outcome ? null : outcome;  // click again to unset
+            saveTrackedSlips(tracked);
+            render();
+        }
+
+        function removeSlip(id) {
+            const tracked = getTrackedSlips();
+            delete tracked[id];
+            saveTrackedSlips(tracked);
+            render();
+        }
+
+        function renderSlips() {
+            const section = document.getElementById('slipsSection');
+            const list = document.getElementById('slipsList');
+            const header = document.getElementById('slipsHeader');
+            const tracked = getTrackedSlips();
+            const ids = Object.keys(tracked).sort((a, b) => tracked[b].ts - tracked[a].ts);
+
+            if (ids.length === 0) {
+                section.style.display = 'none';
+                return false;
+            }
+
+            // Summary: settled slips, 1 unit staked each, payout by outcome
+            let settled = 0, returned = 0;
+            for (const id of ids) {
+                const e = tracked[id];
+                if (e.outcome !== null && e.outcome !== undefined) {
+                    settled++;
+                    returned += (SLIP_PAYOUTS[e.kind] || {})[e.outcome] ?? 0;
+                }
+            }
+            const roi = settled > 0 ? ((returned - settled) / settled * 100) : null;
+            header.innerHTML = `Tracked Slips — ${ids.length} tracked, ${settled} settled` +
+                (roi !== null ? ` · ROI <span class="${roi > 0 ? 'ev-positive' : roi < 0 ? 'ev-negative' : ''}">${roi > 0 ? '+' : ''}${roi.toFixed(0)}%</span> (1 unit each)` : '');
+
+            list.innerHTML = ids.map(id => {
+                const e = tracked[id];
+                const when = new Date(e.ts).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+                const legsHtml = e.legs.map(l => `
+                    <div class="slip-leg">
+                        <span class="badge badge-primary" style="margin-right:4px;">${escapeHtml(l.sport || '')}</span>
+                        <strong>${escapeHtml(l.player)}</strong>
+                        ${l.selection || ''} ${l.line ?? ''} ${l.type || ''}
+                        <span class="meta">(${escapeHtml(l.event)}, ${(l.prob * 100).toFixed(1)}%)</span>
+                    </div>`).join('');
+
+                const btn = (outcome, label, cls) => {
+                    const active = e.outcome === outcome;
+                    return `<button class="btn btn-secondary" style="padding:4px 10px; ${active ? `border-color:var(--${cls}); color:var(--${cls});` : ''}"
+                        onclick="setSlipOutcome('${escapeAttr(id)}','${outcome}')">${label}</button>`;
+                };
+                const gradeButtons = e.kind === '6-flex'
+                    ? btn('6', '6/6', 'green') + btn('5', '5/6', 'green') + btn('4', '4/6', 'accent') + btn('0', '<4', 'red')
+                    : btn('w', 'W', 'green') + btn('l', 'L', 'red');
+
+                return `
+                    <div class="slip-card ${e.outcome === null || e.outcome === undefined ? '' : ((SLIP_PAYOUTS[e.kind] || {})[e.outcome] > 1 ? 'pos' : 'neg')}">
+                        <div>
+                            <span class="slip-num">${when} · ${e.kind === '6-flex' ? '6-Man Flex' : '2-Man Power'} · +${(e.ev * 100).toFixed(1)}% EV at track</span>
+                            ${legsHtml}
+                        </div>
+                        <div class="slip-ev" style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+                            <div style="white-space:nowrap; display:flex; gap:4px;">${gradeButtons}</div>
+                            <button class="btn btn-secondary" style="padding:4px 10px;" title="Remove slip" onclick="removeSlip('${escapeAttr(id)}')">✕</button>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            section.style.display = 'block';
+            return true;
+        }
+
         function render() {
             const tracked = getTrackedBets();
             const ids = Object.keys(tracked);
@@ -122,10 +221,12 @@
             const tableContainer = document.getElementById('tableContainer');
             const noData = document.getElementById('noData');
 
+            const hasSlips = renderSlips();
+
             if (ids.length === 0) {
                 statRow.style.display = 'none';
                 tableContainer.style.display = 'none';
-                noData.style.display = 'block';
+                noData.style.display = hasSlips ? 'none' : 'block';
                 return;
             }
 
