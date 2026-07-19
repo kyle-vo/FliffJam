@@ -127,7 +127,31 @@ def get_ev_opportunities():
             target_scale = odds_to_scale(target_odds)
             sharp_scale = odds_to_scale(sharp_odds)
             opp['value'] = target_scale - sharp_scale
-        
+
+        # Edge: the number that actually decides money, per book.
+        # - Kalshi: fee-adjusted EV%. Kalshi charges ~0.07*P*(1-P) per contract,
+        #   worst near coin-flips, so raw EV overstates the edge.
+        # - PrizePicks: you're paid flex/power multipliers, not the quoted odds.
+        #   Edge = true prob minus the ~54.5%/leg 6-flex breakeven (the most
+        #   forgiving entry PP offers), in probability points.
+        PP_FLEX_BREAKEVEN = 0.545
+        for opp in opportunities:
+            book = (opp.get('target_book') or '').lower()
+            true_prob = opp.get('true_probability')
+            target_decimal = opp.get('target_decimal')
+            if true_prob is None:
+                opp['edge'] = None
+                continue
+            if book == 'kalshi' and target_decimal:
+                price = 1.0 / target_decimal            # contract price in $
+                fee = 0.07 * price * (1.0 - price)      # Kalshi trading fee
+                effective_decimal = 1.0 / (price + fee)
+                opp['edge'] = (true_prob * effective_decimal - 1.0) * 100
+            elif book == 'prizepicks':
+                opp['edge'] = (true_prob - PP_FLEX_BREAKEVEN) * 100
+            else:
+                opp['edge'] = opp.get('ev_percent')
+
         # Filter for positive EV only (optional - keeping all for now)
         positive_ev = [opp for opp in opportunities if opp['ev'] > 0]
         

@@ -363,7 +363,7 @@
         <div class="controls">
             <div class="filter-group">
                 <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
-                <button class="btn btn-secondary" onclick="toggleSlips()">🎟️ 2-Man Slips</button>
+                <button class="btn btn-secondary" onclick="toggleSlips()">🎟️ Slip Builder</button>
                 <span id="dataAge" style="color: var(--muted); font-size: 0.85em;"></span>
             </div>
             
@@ -429,7 +429,7 @@
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="slipsPanel" style="display: none;">
-            <h3>🎟️ Best 2-Man PrizePicks Slips <span style="color: var(--muted); font-weight: 500;">(Power Play, 3x)</span></h3>
+            <h3>🎟️ PrizePicks Slip Builder <span style="color: var(--muted); font-weight: 500;">— legs from de-vigged sharp consensus, cross-game guarded</span></h3>
             <div id="slipsList"></div>
         </div>
 
@@ -451,6 +451,7 @@
                         <th>FanDuel</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
                         <th class="sortable" onclick="sortTable('value')">Value</th>
+                        <th class="sortable" onclick="sortTable('edge')" title="Kalshi: fee-adjusted EV%. PrizePicks: probability points above/below the 54.5% 6-flex breakeven.">Edge</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -466,12 +467,17 @@
     <script>
         let allData = [];
         let filteredData = [];
-        let sortColumn = 'value';
+        let sortColumn = 'edge';
         let sortDirection = 'desc';
         let fetchedAt = null;
 
-        // PrizePicks 2-pick Power Play: 3x payout → each leg must hit 57.7%
-        const PP_BREAKEVEN = Math.sqrt(1 / 3);
+        // PrizePicks breakevens per leg:
+        // 2-pick Power (3x): each leg must hit 57.7%
+        // 6-pick Flex (25x/2x/0.4x): ~54.5% per leg to clear breakeven
+        const PP_POWER_BREAKEVEN = Math.sqrt(1 / 3);
+        const PP_FLEX_BREAKEVEN = 0.545;
+        // 6-pick Flex payout table: hits → multiplier
+        const FLEX6_PAYOUTS = { 6: 25, 5: 2, 4: 0.4 };
 
         // Load data on page load
         window.addEventListener('DOMContentLoaded', () => {
@@ -700,13 +706,19 @@
                            CLV ${clv.delta > 0 ? '+' : ''}${clv.delta.toFixed(0)}</div>`
                     : '';
 
-                // PrizePicks breakeven badge (2-pick Power: needs 57.7% per leg)
+                // Tiered PrizePicks badge:
+                // green = clears 2-Power (57.7%), amber = clears 6-Flex (54.5%), muted = neither
                 const isPP = (item.target_book || '').toLowerCase() === 'prizepicks';
-                const ppBadge = isPP
-                    ? (item.true_probability >= PP_BREAKEVEN
-                        ? ' <span class="badge badge-success" title="Above 57.7% PrizePicks 2-pick breakeven">PP ✓</span>'
-                        : ' <span class="badge badge-primary" title="Below 57.7% PrizePicks 2-pick breakeven">PP ✗</span>')
-                    : '';
+                let ppBadge = '';
+                if (isPP) {
+                    if (item.true_probability >= PP_POWER_BREAKEVEN) {
+                        ppBadge = ' <span class="badge badge-success" title="Clears the 57.7% 2-pick Power breakeven (and 6-Flex)">POWER</span>';
+                    } else if (item.true_probability >= PP_FLEX_BREAKEVEN) {
+                        ppBadge = ' <span class="badge badge-warning" title="Clears the 54.5% 6-pick Flex breakeven, not 2-pick Power">FLEX</span>';
+                    } else {
+                        ppBadge = ' <span class="badge badge-primary" title="Below every PrizePicks breakeven — skip">✗</span>';
+                    }
+                }
 
                 // Sharp books disagreeing with each other = unstable/mismatched line
                 const spread = sharpSpread(item);
@@ -734,10 +746,11 @@
                         ${sharpCell(item, 'pinnacle')}
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
-                        <td>${(item.true_probability * 100).toFixed(1)}%${ppBadge}</td>
+                        <td title="Consensus of ${item.consensus_books || 1} sharp book${(item.consensus_books || 1) > 1 ? 's' : ''}, de-vigged">${(item.true_probability * 100).toFixed(1)}%${ppBadge}</td>
                         <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
                             ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}${warnHtml}
                         </td>
+                        ${edgeCell(item)}
                     </tr>
                 `;
             }).join('');
@@ -807,6 +820,20 @@
             return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }
         
+        // Edge column: the number that decides money.
+        // Kalshi → fee-adjusted EV%. PrizePicks → prob points vs 6-flex breakeven.
+        function edgeCell(item) {
+            const v = item.edge;
+            if (v === null || v === undefined) return '<td>-</td>';
+            const isPP = (item.target_book || '').toLowerCase() === 'prizepicks';
+            const cls = v > 0 ? 'ev-positive' : 'ev-negative';
+            const unit = isPP ? 'pp' : '%';
+            const tip = isPP
+                ? 'True prob minus the 54.5% per-leg 6-flex breakeven'
+                : 'EV% after Kalshi trading fees (0.07 × P × (1−P) per contract)';
+            return `<td class="ev-value ${cls}" title="${tip}">${v > 0 ? '+' : ''}${v.toFixed(1)}${unit}</td>`;
+        }
+
         function toggleSlips() {
             const panel = document.getElementById('slipsPanel');
             const show = panel.style.display === 'none';
@@ -814,16 +841,20 @@
             if (show) renderSlips();
         }
 
-        function renderSlips() {
-            const list = document.getElementById('slipsList');
-
-            // Candidate legs: PrizePicks picks only, upcoming games, one best pick per player+market
+        // Build the candidate leg pool for slips: PrizePicks only, upcoming
+        // games, sharp books in agreement, one best pick per player+market.
+        function slipLegPool() {
             const now = Date.now();
-            const candidates = allData.filter(i =>
+            const base = allData.filter(i =>
                 (i.target_book || '').toLowerCase() === 'prizepicks' &&
                 i.true_probability !== null && i.true_probability !== undefined &&
                 (!i.commence_time || new Date(i.commence_time) > now)
             );
+
+            // Quality gate: skip legs where sharp books disagree badly (bad
+            // match or moving line). Relax if it would starve the pool.
+            let candidates = base.filter(i => sharpSpread(i) <= 40);
+            if (candidates.length < 6) candidates = base;
 
             const bestPerPlayer = {};
             for (const c of candidates) {
@@ -832,30 +863,51 @@
                     bestPerPlayer[key] = c;
                 }
             }
-            // Top legs by true probability
-            const legs = Object.values(bestPerPlayer)
-                .sort((a, b) => b.true_probability - a.true_probability)
-                .slice(0, 15);
+            return Object.values(bestPerPlayer)
+                .sort((a, b) => b.true_probability - a.true_probability);
+        }
 
-            if (legs.length < 2) {
-                list.innerHTML = '<p style="color:var(--muted);">Not enough PrizePicks picks available to build slips. (Slips need at least 2 PP legs from different games.)</p>';
-                return;
+        // Best 6-man flex: greedy top-6 by true prob, max 2 legs per game
+        // (never the same player). EV over the full flex payout distribution
+        // via Poisson-binomial DP — legs have different probabilities.
+        function bestSixFlex(pool) {
+            const chosen = [];
+            const perEvent = {};
+            const usedPlayers = new Set();
+            for (const l of pool) {
+                if ((perEvent[l.event] || 0) >= 2) continue;
+                if (usedPlayers.has(l.player)) continue;  // PP: one square per player
+                chosen.push(l);
+                usedPlayers.add(l.player);
+                perEvent[l.event] = (perEvent[l.event] || 0) + 1;
+                if (chosen.length === 6) break;
             }
+            if (chosen.length < 6) return null;
 
-            // All cross-game pairs (correlation guard: never two legs from the same event)
-            const slips = [];
-            for (let a = 0; a < legs.length; a++) {
-                for (let b = a + 1; b < legs.length; b++) {
-                    if (legs[a].event === legs[b].event) continue;
-                    const combined = legs[a].true_probability * legs[b].true_probability;
-                    slips.push({ legs: [legs[a], legs[b]], combined, ev: 3 * combined - 1 });
+            // dp[k] = P(exactly k legs hit)
+            let dp = [1];
+            for (const l of chosen) {
+                const p = l.true_probability;
+                const next = new Array(dp.length + 1).fill(0);
+                for (let k = 0; k < dp.length; k++) {
+                    next[k] += dp[k] * (1 - p);
+                    next[k + 1] += dp[k] * p;
                 }
+                dp = next;
             }
-            slips.sort((x, y) => y.ev - x.ev);
-            const top = slips.slice(0, 10);
+            let ev = -1;
+            for (const [hits, mult] of Object.entries(FLEX6_PAYOUTS)) {
+                ev += dp[parseInt(hits)] * mult;
+            }
+            return { legs: chosen, dp, ev };
+        }
 
-            if (top.length === 0) {
-                list.innerHTML = '<p style="color:var(--muted);">No valid cross-game pairs found.</p>';
+        function renderSlips() {
+            const list = document.getElementById('slipsList');
+            const pool = slipLegPool();
+
+            if (pool.length < 2) {
+                list.innerHTML = '<p style="color:var(--muted);">Not enough PrizePicks picks available to build slips. (Slips need at least 2 PP legs from different games.)</p>';
                 return;
             }
 
@@ -866,21 +918,59 @@
                     <span class="meta">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
                 </div>`;
 
-            list.innerHTML = top.map((s, idx) => `
-                <div class="slip-card ${s.ev > 0 ? 'pos' : 'neg'}">
-                    <div>
-                        <span class="slip-num">#${idx + 1}</span>
-                        ${legHtml(s.legs[0])}
-                        ${legHtml(s.legs[1])}
-                    </div>
-                    <div class="slip-ev">
-                        <div class="big ${s.ev > 0 ? 'ev-positive' : 'ev-negative'}">
-                            ${s.ev > 0 ? '+' : ''}${(s.ev * 100).toFixed(1)}% EV
+            let html = '';
+
+            // ---- Best 6-man flex ----
+            const flex = bestSixFlex(pool);
+            if (flex) {
+                const p6 = flex.dp[6], p5 = flex.dp[5], p4 = flex.dp[4];
+                html += `
+                    <div style="font-weight:700; font-size:0.9em; margin: 4px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px;">Best 6-Man Flex (25x / 2x / 0.4x)</div>
+                    <div class="slip-card ${flex.ev > 0 ? 'pos' : 'neg'}">
+                        <div>${flex.legs.map(legHtml).join('')}</div>
+                        <div class="slip-ev">
+                            <div class="big ${flex.ev > 0 ? 'ev-positive' : 'ev-negative'}">
+                                ${flex.ev > 0 ? '+' : ''}${(flex.ev * 100).toFixed(1)}% EV
+                            </div>
+                            <div class="sub">6/6: ${(p6 * 100).toFixed(1)}% · 5/6: ${(p5 * 100).toFixed(1)}% · 4/6: ${(p4 * 100).toFixed(1)}%</div>
                         </div>
-                        <div class="sub">${(s.combined * 100).toFixed(1)}% both hit</div>
+                    </div>`;
+            }
+
+            // ---- Top 2-man power pairs (cross-game only) ----
+            const legs = pool.slice(0, 15);
+            const slips = [];
+            for (let a = 0; a < legs.length; a++) {
+                for (let b = a + 1; b < legs.length; b++) {
+                    if (legs[a].event === legs[b].event) continue;
+                    if (legs[a].player === legs[b].player) continue;
+                    const combined = legs[a].true_probability * legs[b].true_probability;
+                    slips.push({ legs: [legs[a], legs[b]], combined, ev: 3 * combined - 1 });
+                }
+            }
+            slips.sort((x, y) => y.ev - x.ev);
+            const top = slips.slice(0, 6);
+
+            if (top.length > 0) {
+                html += `<div style="font-weight:700; font-size:0.9em; margin: 14px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px;">Top 2-Man Power (3x)</div>`;
+                html += top.map((s, idx) => `
+                    <div class="slip-card ${s.ev > 0 ? 'pos' : 'neg'}">
+                        <div>
+                            <span class="slip-num">#${idx + 1}</span>
+                            ${legHtml(s.legs[0])}
+                            ${legHtml(s.legs[1])}
+                        </div>
+                        <div class="slip-ev">
+                            <div class="big ${s.ev > 0 ? 'ev-positive' : 'ev-negative'}">
+                                ${s.ev > 0 ? '+' : ''}${(s.ev * 100).toFixed(1)}% EV
+                            </div>
+                            <div class="sub">${(s.combined * 100).toFixed(1)}% both hit</div>
+                        </div>
                     </div>
-                </div>
-            `).join('');
+                `).join('');
+            }
+
+            list.innerHTML = html || '<p style="color:var(--muted);">No valid slips found.</p>';
         }
 
         function escapeHtml(text) {

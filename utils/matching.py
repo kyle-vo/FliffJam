@@ -97,8 +97,12 @@ class MarketMatcher:
                 # Same event required — team/player names alone can collide
                 # across different games (teams play multiple times a week).
                 # Event names come from the API's event object, so exact
-                # equality is safe across bookmakers.
+                # equality is safe across bookmakers. commence_time must match
+                # too: doubleheaders/series share the same event name.
                 if candidate.get('event') != target_market.get('event'):
+                    continue
+                if (candidate.get('commence_time') and target_market.get('commence_time')
+                        and candidate.get('commence_time') != target_market.get('commence_time')):
                     continue
 
                 sharp_player = candidate.get('player', '')
@@ -141,6 +145,10 @@ class MarketMatcher:
         best_score = 0
         for candidate in candidates:
             if candidate.get('event') != target_market.get('event'):
+                continue
+            # Doubleheaders/series share event names — times must match too
+            if (candidate.get('commence_time') and target_market.get('commence_time')
+                    and candidate.get('commence_time') != target_market.get('commence_time')):
                 continue
             if target_selection and candidate.get('selection', '').lower() != target_selection.lower():
                 continue

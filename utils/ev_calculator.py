@@ -206,19 +206,29 @@ class EVCalculator:
         return results
 
 
+    # Weight per sharp book when averaging de-vigged probabilities into a
+    # consensus. Pinnacle is the sharpest so it counts double.
+    BOOK_WEIGHTS = {'pinnacle': 2.0, 'draftkings': 1.0, 'fanduel': 1.0}
+
     def calculate_ev_multi(
         self,
         matched_multi: List[Dict],
-        sharp_pairs: List[Dict]
+        sharp_pairs: List[Dict],
+        h2h_pairs: Optional[Dict] = None
     ) -> List[Dict]:
         """
-        EV for multi-book matches. De-vigs against the sharpest available book
-        (SHARP_PRIORITY order) for the "true" probability, but carries every
-        matched book's price in `sharp_odds_by_book` for a side-by-side display.
+        EV for multi-book matches. Builds a CONSENSUS true probability by
+        de-vigging every sharp book that has a two-sided market (over/under
+        pair for props, both moneylines for h2h) and weight-averaging them
+        (Pinnacle double weight). Averaging across books removes single-book
+        bias; de-vigging h2h removes the vig that was previously baked into
+        moneyline probabilities. Carries every matched book's price in
+        `sharp_odds_by_book` for a side-by-side display.
         """
         from .matching import SHARP_PRIORITY
 
         results = []
+        h2h_pairs = h2h_pairs or {}
 
         pair_lookup = {}
         for pair in sharp_pairs:
@@ -231,7 +241,7 @@ class EVCalculator:
             if not target or not sharps:
                 continue
 
-            # Pick the sharpest book present for the true-probability reference
+            # Sharpest book present is still the display reference
             ref_book = next((b for b in SHARP_PRIORITY if b in sharps), None)
             if ref_book is None:
                 ref_book = sorted(sharps.keys())[0]
@@ -247,24 +257,49 @@ class EVCalculator:
                 for book, m in sharps.items()
             }
 
-            # De-vig the reference book's own over/under pair
-            lookup_key = (ref_book, ref.get('player', ''), ref.get('market_key', ''), ref.get('line'))
-            sharp_pair = pair_lookup.get(lookup_key)
-
             selection = target.get('selection', '').lower()
-            if sharp_pair:
-                vig_removed = self.remove_vig_multiplicative(
-                    sharp_pair['over']['decimal_odds'],
-                    sharp_pair['under']['decimal_odds']
-                )
-                if selection == 'over':
-                    true_prob = vig_removed['over_true_prob']
-                elif selection == 'under':
-                    true_prob = vig_removed['under_true_prob']
+            market_key = target.get('market_key', '')
+
+            # De-vig each book that has a two-sided market, collect (prob, weight)
+            probs = []
+            weights = []
+            vig = None
+            for book, m in sharps.items():
+                p = None
+                if market_key == 'h2h':
+                    # Moneyline: de-vig using both teams' prices at this book
+                    hk = (book, m.get('event', ''), m.get('commence_time', ''), m.get('player', ''))
+                    sides = h2h_pairs.get(hk)
+                    if sides:
+                        own_dec, other_dec = sides
+                        own_imp = 1.0 / own_dec
+                        other_imp = 1.0 / other_dec
+                        p = own_imp / (own_imp + other_imp)
+                        if book == ref_book:
+                            vig = own_imp + other_imp - 1.0
                 else:
-                    true_prob = self.decimal_to_implied_prob(ref.get('decimal_odds'))
-                vig = vig_removed['vig_removed']
+                    # Prop: de-vig this book's own over/under pair
+                    key = (book, m.get('player', ''), market_key, m.get('line'))
+                    sharp_pair = pair_lookup.get(key)
+                    if sharp_pair:
+                        vr = self.remove_vig_multiplicative(
+                            sharp_pair['over']['decimal_odds'],
+                            sharp_pair['under']['decimal_odds']
+                        )
+                        if selection == 'over':
+                            p = vr['over_true_prob']
+                        elif selection == 'under':
+                            p = vr['under_true_prob']
+                        if book == ref_book:
+                            vig = vr['vig_removed']
+                if p is not None:
+                    probs.append(p)
+                    weights.append(self.BOOK_WEIGHTS.get(book, 1.0))
+
+            if probs:
+                true_prob = sum(p * w for p, w in zip(probs, weights)) / sum(weights)
             else:
+                # No two-sided market anywhere - fall back to ref implied prob
                 true_prob = self.decimal_to_implied_prob(ref.get('decimal_odds'))
                 vig = None
 
@@ -287,6 +322,7 @@ class EVCalculator:
                 'sharp_decimal': ref.get('decimal_odds'),
                 'sharp_odds_by_book': sharp_odds_by_book,
                 'true_probability': true_prob,
+                'consensus_books': len(probs),
                 'vig_removed': vig,
                 'ev': ev,
                 'ev_percent': ev * 100,
@@ -297,6 +333,33 @@ class EVCalculator:
         positive = [r for r in results if r['ev'] > 0]
         logger.info(f"Multi-book EV: {len(positive)} positive of {len(results)} total")
         return results
+
+
+def build_h2h_pairs(sharp_markets: List[Dict]) -> Dict:
+    """
+    Pair both moneyline sides per (bookmaker, event) so h2h markets can be
+    de-vigged like props. Returns {(book, event, team): (own_dec, other_dec)}.
+    """
+    groups = {}
+    for m in sharp_markets:
+        if m.get('market_key') != 'h2h':
+            continue
+        # commence_time in the key: same-name matchups (doubleheaders, series)
+        # must never share a pair, or a live game's prices corrupt the de-vig
+        key = (m.get('bookmaker', ''), m.get('event', ''), m.get('commence_time', ''))
+        groups.setdefault(key, {})
+        groups[key].setdefault(m.get('player', ''), m.get('decimal_odds'))
+
+    h2h_pairs = {}
+    for (book, event, ct), by_team in groups.items():
+        if len(by_team) != 2:
+            continue
+        (team_a, dec_a), (team_b, dec_b) = list(by_team.items())
+        if not dec_a or not dec_b:
+            continue
+        h2h_pairs[(book, event, ct, team_a)] = (dec_a, dec_b)
+        h2h_pairs[(book, event, ct, team_b)] = (dec_b, dec_a)
+    return h2h_pairs
 
 
 def calculate_ev_multi_from_data(
@@ -310,7 +373,8 @@ def calculate_ev_multi_from_data(
     calculator = EVCalculator()
     matcher = MarketMatcher()
     sharp_pairs = matcher.find_two_sided_pairs(sharp_markets)
-    return calculator.calculate_ev_multi(matched_multi, sharp_pairs)
+    h2h_pairs = build_h2h_pairs(sharp_markets)
+    return calculator.calculate_ev_multi(matched_multi, sharp_pairs, h2h_pairs)
 
 
 def calculate_ev_from_data(
