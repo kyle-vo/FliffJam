@@ -648,8 +648,10 @@
             });
             
             tbody.innerHTML = sorted.map(item => {
-                const evClass = item.ev > 0 
-                    ? (item.ev_percent > 5 ? 'high-ev' : 'positive-ev')
+                // Tint rows by fee/payout-adjusted Edge (same signal as the
+                // Edge column), not raw EV — they must never disagree.
+                const evClass = item.edge > 0
+                    ? (item.edge > 3 ? 'high-ev' : 'positive-ev')
                     : '';
                 
                 // Determine sport
