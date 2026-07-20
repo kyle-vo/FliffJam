@@ -409,7 +409,6 @@
                         <th>DraftKings</th>
                         <th>FanDuel</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
-                        <th class="sortable" onclick="sortTable('value')">Value</th>
                         <th class="sortable" onclick="sortTable('edge')" title="Kalshi: fee-adjusted EV%. PrizePicks: probability points above/below the 54.5% 6-flex breakeven.">Edge</th>
                     </tr>
                 </thead>
@@ -709,10 +708,7 @@
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
                         <td title="Consensus of ${item.consensus_books || 1} sharp book${(item.consensus_books || 1) > 1 ? 's' : ''}, de-vigged">${(item.true_probability * 100).toFixed(1)}%${ppBadge}</td>
-                        <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
-                            ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}${warnHtml}
-                        </td>
-                        ${edgeCell(item)}
+                        ${edgeCell(item, warnHtml)}
                     </tr>
                 `;
             }).join('');
@@ -784,16 +780,16 @@
         
         // Edge column: the number that decides money.
         // Kalshi → fee-adjusted EV%. PrizePicks → prob points vs 6-flex breakeven.
-        function edgeCell(item) {
+        function edgeCell(item, warnHtml = '') {
             const v = item.edge;
-            if (v === null || v === undefined) return '<td>-</td>';
+            if (v === null || v === undefined) return `<td>-${warnHtml}</td>`;
             const isPP = (item.target_book || '').toLowerCase() === 'prizepicks';
             const cls = v > 0 ? 'ev-positive' : 'ev-negative';
             const unit = isPP ? 'pp' : '%';
             const tip = isPP
                 ? 'True prob minus the 54.5% per-leg 6-flex breakeven'
                 : 'EV% after Kalshi trading fees (0.07 × P × (1−P) per contract)';
-            return `<td class="ev-value ${cls}" title="${tip}">${v > 0 ? '+' : ''}${v.toFixed(1)}${unit}</td>`;
+            return `<td class="ev-value ${cls}" title="${tip}">${v > 0 ? '+' : ''}${v.toFixed(1)}${unit}${warnHtml}</td>`;
         }
 
         function escapeHtml(text) {

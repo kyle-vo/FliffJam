@@ -107,7 +107,6 @@
                         <th>DraftKings</th>
                         <th>FanDuel</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
-                        <th class="sortable" onclick="sortTable('value')">Value</th>
                         <th class="sortable" onclick="sortTable('edge')" title="Fee-adjusted EV% for Kalshi">Edge</th>
                     </tr>
                 </thead>
@@ -311,9 +310,6 @@
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
                         <td title="Consensus of ${item.consensus_books || 1} sharp book${(item.consensus_books || 1) > 1 ? 's' : ''}, de-vigged">${(item.true_probability * 100).toFixed(1)}%</td>
-                        <td class="ev-value ${item.value > 0 ? 'ev-positive' : 'ev-negative'}">
-                            ${item.value > 0 ? '+' : ''}${item.value.toFixed(0)}
-                        </td>
                         <td class="ev-value ${item.edge > 0 ? 'ev-positive' : 'ev-negative'}" title="EV% after Kalshi trading fees">
                             ${item.edge !== null && item.edge !== undefined ? (item.edge > 0 ? '+' : '') + item.edge.toFixed(1) + '%' : '-'}${warnHtml}
                         </td>
