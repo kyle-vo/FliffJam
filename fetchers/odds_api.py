@@ -29,9 +29,7 @@ else:
     # Fallback to single key for backwards compatibility
     API_KEYS = [os.getenv('ODDS_API_KEY', '')]
 
-# Start with key #6 (index 5) since keys 1-5 are exhausted
-# This ensures NBA spreads are fetched successfully from the start
-current_key_index = 5 if len(API_KEYS) >= 6 else 0
+current_key_index = 0
 
 # Books you actually bet on (kalshi = exchange, prizepicks = DFS) vs the sharp
 # books whose de-vigged lines act as "true" probability. Priority order of
@@ -108,26 +106,33 @@ class OddsAPIFetcher:
         
         try:
             response = self.session.get(url, params=params, timeout=10)
-            
-            # Check if quota exceeded (402 or remaining = 0)
+
+            # On a quota-exhausted key (402), keep rotating until a key with
+            # quota is found — trying just one neighbor fails when several
+            # consecutive keys are dead.
+            attempts = 0
+            while response.status_code == 402 and attempts < len(API_KEYS) - 1:
+                logger.warning("⚠️ API key exhausted (402). Rotating...")
+                self.api_key = API_KEYS[current_key_index]
+                current_key_index = (current_key_index + 1) % len(API_KEYS)
+                logger.info(f"🔄 Switched to API key #{current_key_index} of {len(API_KEYS)}")
+                params['apiKey'] = self.api_key
+                response = self.session.get(url, params=params, timeout=10)
+                attempts += 1
+
+            if response.status_code == 402:
+                logger.error("❌ All API keys exhausted!")
+                return None
+
+            # Call succeeded but drained this key: keep the data, rotate for
+            # the next call instead of re-spending a credit now.
             remaining = response.headers.get('x-requests-remaining')
-            if response.status_code == 402 or (remaining and int(remaining) == 0):
-                logger.warning(f"⚠️ API key exhausted (remaining: {remaining}). Rotating to next key...")
-                
-                # Try next key
-                if len(API_KEYS) > 1:
-                    old_key_index = (current_key_index - 1) % len(API_KEYS)
-                    self.api_key = API_KEYS[current_key_index]
-                    current_key_index = (current_key_index + 1) % len(API_KEYS)
-                    logger.info(f"🔄 Switched to API key #{current_key_index} of {len(API_KEYS)}")
-                    
-                    # Retry with new key
-                    params['apiKey'] = self.api_key
-                    response = self.session.get(url, params=params, timeout=10)
-                else:
-                    logger.error("❌ Only one API key configured and it's exhausted!")
-                    return None
-            
+            if remaining is not None and float(remaining) <= 0:
+                logger.warning("⚠️ Key drained to 0 remaining — rotating for subsequent calls")
+                self.api_key = API_KEYS[current_key_index]
+                current_key_index = (current_key_index + 1) % len(API_KEYS)
+                params['apiKey'] = self.api_key
+
             response.raise_for_status()
             
             # Log remaining requests
