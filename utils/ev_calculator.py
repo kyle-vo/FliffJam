@@ -266,9 +266,9 @@ class EVCalculator:
             vig = None
             for book, m in sharps.items():
                 p = None
-                if market_key == 'h2h':
-                    # Moneyline: de-vig using both teams' prices at this book
-                    hk = (book, m.get('event', ''), m.get('commence_time', ''), m.get('player', ''))
+                if market_key in ('h2h', 'spreads'):
+                    # Game market: de-vig using both sides' prices at this book
+                    hk = (market_key, book, m.get('event', ''), m.get('commence_time', ''), m.get('player', ''))
                     sides = h2h_pairs.get(hk)
                     if sides:
                         own_dec, other_dec = sides
@@ -335,31 +335,40 @@ class EVCalculator:
         return results
 
 
-def build_h2h_pairs(sharp_markets: List[Dict]) -> Dict:
+def build_game_pairs(sharp_markets: List[Dict]) -> Dict:
     """
-    Pair both moneyline sides per (bookmaker, event) so h2h markets can be
-    de-vigged like props. Returns {(book, event, team): (own_dec, other_dec)}.
+    Pair both sides of two-sided GAME markets (h2h moneylines and spreads)
+    per (market, bookmaker, event, commence_time) so they can be de-vigged
+    like props. For spreads, the two lines must be complementary (+3.5/-3.5)
+    or the pair is rejected. commence_time is in the key so same-name
+    matchups (doubleheaders, series) never share a pair.
+
+    Returns {(market_key, book, event, ct, team): (own_dec, other_dec)}.
     """
     groups = {}
     for m in sharp_markets:
-        if m.get('market_key') != 'h2h':
+        mk = m.get('market_key')
+        if mk not in ('h2h', 'spreads'):
             continue
-        # commence_time in the key: same-name matchups (doubleheaders, series)
-        # must never share a pair, or a live game's prices corrupt the de-vig
-        key = (m.get('bookmaker', ''), m.get('event', ''), m.get('commence_time', ''))
+        key = (mk, m.get('bookmaker', ''), m.get('event', ''), m.get('commence_time', ''))
         groups.setdefault(key, {})
-        groups[key].setdefault(m.get('player', ''), m.get('decimal_odds'))
+        groups[key].setdefault(m.get('player', ''), m)
 
-    h2h_pairs = {}
-    for (book, event, ct), by_team in groups.items():
+    pairs = {}
+    for (mk, book, event, ct), by_team in groups.items():
         if len(by_team) != 2:
             continue
-        (team_a, dec_a), (team_b, dec_b) = list(by_team.items())
+        (team_a, ma), (team_b, mb) = list(by_team.items())
+        dec_a, dec_b = ma.get('decimal_odds'), mb.get('decimal_odds')
         if not dec_a or not dec_b:
             continue
-        h2h_pairs[(book, event, ct, team_a)] = (dec_a, dec_b)
-        h2h_pairs[(book, event, ct, team_b)] = (dec_b, dec_a)
-    return h2h_pairs
+        if mk == 'spreads':
+            line_a, line_b = ma.get('line'), mb.get('line')
+            if line_a is None or line_b is None or abs(line_a + line_b) > 0.01:
+                continue
+        pairs[(mk, book, event, ct, team_a)] = (dec_a, dec_b)
+        pairs[(mk, book, event, ct, team_b)] = (dec_b, dec_a)
+    return pairs
 
 
 def calculate_ev_multi_from_data(
@@ -373,8 +382,8 @@ def calculate_ev_multi_from_data(
     calculator = EVCalculator()
     matcher = MarketMatcher()
     sharp_pairs = matcher.find_two_sided_pairs(sharp_markets)
-    h2h_pairs = build_h2h_pairs(sharp_markets)
-    return calculator.calculate_ev_multi(matched_multi, sharp_pairs, h2h_pairs)
+    game_pairs = build_game_pairs(sharp_markets)
+    return calculator.calculate_ev_multi(matched_multi, sharp_pairs, game_pairs)
 
 
 def calculate_ev_from_data(
