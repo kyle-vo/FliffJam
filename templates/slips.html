@@ -217,6 +217,13 @@
             if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
 
+        // Fade button: PrizePicks opens in a new tab (via the anchor's href);
+        // this just makes sure the flipped legs are visible to enter from.
+        function showFade(idx) {
+            const el = document.getElementById(`fade-${idx}`);
+            if (el) el.style.display = 'block';
+        }
+
         function getTrackedSlips() {
             const t = localStorage.getItem('trackedSlips');
             return t ? JSON.parse(t) : {};
@@ -319,10 +326,11 @@
                             <div class="sub">6/6: ${(f.dp[6] * 100).toFixed(1)}% · 5/6: ${(f.dp[5] * 100).toFixed(1)}% · 4/6: ${(f.dp[4] * 100).toFixed(1)}%</div>
                             <div style="display:flex; gap:6px; justify-content:flex-end;">
                                 ${trackBtn('flex', idx, f.legs)}
-                                <button class="btn btn-secondary" style="padding:5px 12px; margin-top:6px;"
-                                        title="Show the exact opposite slip (every leg flipped)"
-                                        onclick="toggleFade(${idx})">Fade ↩</button>
-                                <a href="https://app.prizepicks.com/" target="_blank" rel="noopener"
+                                <a href="https://www.prizepicks.com/" target="_blank" rel="noopener"
+                                   class="btn btn-primary" style="padding:5px 12px; margin-top:6px;"
+                                   title="Opens PrizePicks and shows the flipped legs below to enter"
+                                   onclick="showFade(${idx})">Fade ↗</a>
+                                <a href="https://www.prizepicks.com/" target="_blank" rel="noopener"
                                    class="btn btn-primary" style="padding:5px 12px; margin-top:6px;">Bet on PP ↗</a>
                             </div>
                         </div>
@@ -337,8 +345,6 @@
                                     <div class="sub">6/6: ${(fade.dp[6] * 100).toFixed(1)}% · 5/6: ${(fade.dp[5] * 100).toFixed(1)}% · 4/6: ${(fade.dp[4] * 100).toFixed(1)}%</div>
                                     <div style="display:flex; gap:6px; justify-content:flex-end;">
                                         ${trackBtn('fade', idx, fade.legs)}
-                                        <a href="https://app.prizepicks.com/" target="_blank" rel="noopener"
-                                           class="btn btn-primary" style="padding:5px 12px; margin-top:6px;">Bet on PP ↗</a>
                                     </div>
                                 </div>
                             </div>
