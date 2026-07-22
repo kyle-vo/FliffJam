@@ -151,22 +151,14 @@ class TestEdgeMetric:
 
     FUTURE = '2030-01-01T00:00:00Z'
 
-    def test_kalshi_edge_is_fee_adjusted(self, monkeypatch):
-        """Kalshi edge must equal EV against 0.07*P*(1-P) fee-added price."""
+    def test_non_prizepicks_targets_are_dropped(self, monkeypatch):
+        """The product is PrizePicks-only; other target books never surface."""
         target = [_mk('kalshi', 'h2h', 'A', 100, 2.0, ct=self.FUTURE)]
         sharp = [
             _mk('pinnacle', 'h2h', 'A', -120, 1.833, ct=self.FUTURE),
             _mk('pinnacle', 'h2h', 'B', 100, 2.0, ct=self.FUTURE),
         ]
-        opps = self._opportunities(monkeypatch, target, sharp)
-        opp = opps[0]
-
-        price = 1 / 2.0
-        fee = 0.07 * price * (1 - price)
-        expected_edge = (opp['true_probability'] * (1 / (price + fee)) - 1) * 100
-        assert abs(opp['edge'] - expected_edge) < 1e-9
-        # Fees always cost something: edge strictly below raw EV%
-        assert opp['edge'] < opp['ev_percent']
+        assert self._opportunities(monkeypatch, target, sharp) == []
 
     def test_prizepicks_edge_is_vs_flex_breakeven(self, monkeypatch):
         target = [_mk('prizepicks', 'player_points', 'LeBron James', -137, 1.73,
@@ -183,15 +175,21 @@ class TestEdgeMetric:
 
     def test_live_games_are_dropped(self, monkeypatch):
         past = '2020-01-01T00:00:00Z'
+
+        def prop(book, ct, event, sel):
+            return _mk(book, 'player_points', 'LeBron James', -137 if book == 'prizepicks' else -110,
+                       1.73 if book == 'prizepicks' else 1.909,
+                       ct=ct, event=event, line=25.5, selection=sel, sport='basketball_nba')
+
         target = [
-            _mk('kalshi', 'h2h', 'A', 100, 2.0, ct=past),
-            _mk('kalshi', 'h2h', 'A', 100, 2.0, ct=self.FUTURE, event='C vs D'),
+            prop('prizepicks', past, 'A vs B', 'Over'),
+            prop('prizepicks', self.FUTURE, 'C vs D', 'Over'),
         ]
         sharp = [
-            _mk('pinnacle', 'h2h', 'A', -110, 1.909, ct=past),
-            _mk('pinnacle', 'h2h', 'B', -110, 1.909, ct=past),
-            _mk('pinnacle', 'h2h', 'A', -110, 1.909, ct=self.FUTURE, event='C vs D'),
-            _mk('pinnacle', 'h2h', 'B', -110, 1.909, ct=self.FUTURE, event='C vs D'),
+            prop('pinnacle', past, 'A vs B', 'Over'),
+            prop('pinnacle', past, 'A vs B', 'Under'),
+            prop('pinnacle', self.FUTURE, 'C vs D', 'Over'),
+            prop('pinnacle', self.FUTURE, 'C vs D', 'Under'),
         ]
         opps = self._opportunities(monkeypatch, target, sharp)
         assert len(opps) == 1

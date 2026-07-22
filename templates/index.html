@@ -315,12 +315,11 @@
         <header>
             <div class="logo-mark">🎯</div>
             <h1>FLIFF<span>JAM</span></h1>
-            <p>Kalshi &amp; PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+            <p>PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
         </header>
         
         <div class="nav-tabs">
             <a href="/" class="nav-tab active">🏀 Player Props</a>
-            <a href="/spreads" class="nav-tab">📊 Spreads View</a>
             <a href="/slips" class="nav-tab">🎟️ Slip Builder</a>
             <a href="/results" class="nav-tab">📈 Results</a>
         </div>
@@ -332,18 +331,8 @@
             </div>
             
             <div class="filter-group">
-                <label for="minOdds">Min Odds:</label>
-                <input type="number" id="minOdds" value="-200" step="5" onchange="applyFilters()" style="width: 80px;" title="Minimum My Book odds to show">
-
-                <label for="maxOdds">Max Odds:</label>
-                <input type="number" id="maxOdds" value="200" step="5" onchange="applyFilters()" style="width: 80px;" title="Maximum My Book odds to show">
-
-                <label for="bookFilter">Book:</label>
-                <select id="bookFilter" onchange="applyFilters()">
-                    <option value="">Both</option>
-                    <option value="kalshi">Kalshi</option>
-                    <option value="prizepicks">PrizePicks</option>
-                </select>
+                <label for="minEdge">Min Edge:</label>
+                <input type="number" id="minEdge" value="" step="0.5" placeholder="any" onchange="applyFilters()" style="width: 80px;" title="Only show legs at or above this edge (prob points vs 54.5% flex breakeven)">
 
                 <label for="sportFilter">Sport:</label>
                 <select id="sportFilter" onchange="applyFilters()">
@@ -367,9 +356,6 @@
                     <optgroup label="Baseball">
                         <option value="Strikeouts">Strikeouts</option>
                         <option value="Total Bases">Total Bases</option>
-                    </optgroup>
-                    <optgroup label="Other">
-                        <option value="Moneyline">Moneyline</option>
                     </optgroup>
                 </select>
 
@@ -404,7 +390,6 @@
                         <th class="sortable" onclick="sortTable('market_key')">Type</th>
                         <th class="sortable" onclick="sortTable('line')">Line</th>
                         <th class="sortable" onclick="sortTable('selection')">Over/Under</th>
-                        <th class="sortable" onclick="sortTable('target_odds')">My Book</th>
                         <th>Pinnacle</th>
                         <th>DraftKings</th>
                         <th>FanDuel</th>
@@ -429,10 +414,7 @@
         let sortDirection = 'desc';
         let fetchedAt = null;
 
-        // PrizePicks breakevens per leg:
-        // 2-pick Power (3x): each leg must hit 57.7%
-        // 6-pick Flex (25x/2x/0.4x): ~54.5% per leg to clear breakeven
-        const PP_POWER_BREAKEVEN = Math.sqrt(1 / 3);
+        // PrizePicks 6-pick Flex (25x/2x/0.4x): ~54.5% per leg to clear breakeven
         const PP_FLEX_BREAKEVEN = 0.545;
 
         // Load data on page load
@@ -581,25 +563,17 @@
         }
         
         function applyFilters() {
-            const minOddsRaw = document.getElementById('minOdds').value;
-            const maxOddsRaw = document.getElementById('maxOdds').value;
-            const minOdds = minOddsRaw === '' ? -Infinity : parseFloat(minOddsRaw);
-            const maxOdds = maxOddsRaw === '' ? Infinity : parseFloat(maxOddsRaw);
-            const bookFilter = document.getElementById('bookFilter').value;
+            const minEdgeRaw = document.getElementById('minEdge').value;
+            const minEdge = minEdgeRaw === '' ? -Infinity : parseFloat(minEdgeRaw);
             const sportFilter = document.getElementById('sportFilter').value;
             const marketFilter = document.getElementById('marketFilter').value;
             const hideTracked = document.getElementById('hideTracked').checked;
             const tracked = getTrackedBets();
 
             filteredData = allData.filter(item => {
-                // My Book odds range filter
-                const odds = item.target_odds;
-                if (odds === null || odds === undefined) return false;
-                if (odds < minOdds) return false;
-                if (odds > maxOdds) return false;
-
-                // Book filter (kalshi / prizepicks / both)
-                if (bookFilter && (item.target_book || '').toLowerCase() !== bookFilter) return false;
+                // Minimum edge filter
+                if (item.edge === null || item.edge === undefined) return false;
+                if (item.edge < minEdge) return false;
 
                 // Hide tracked filter
                 if (hideTracked && tracked[getBetId(item)]) return false;
@@ -667,19 +641,10 @@
                            CLV ${clv.delta > 0 ? '+' : ''}${clv.delta.toFixed(0)}</div>`
                     : '';
 
-                // Tiered PrizePicks badge:
-                // green = clears 2-Power (57.7%), amber = clears 6-Flex (54.5%), muted = neither
-                const isPP = (item.target_book || '').toLowerCase() === 'prizepicks';
-                let ppBadge = '';
-                if (isPP) {
-                    if (item.true_probability >= PP_POWER_BREAKEVEN) {
-                        ppBadge = ' <span class="badge badge-success" title="Clears the 57.7% 2-pick Power breakeven (and 6-Flex)">POWER</span>';
-                    } else if (item.true_probability >= PP_FLEX_BREAKEVEN) {
-                        ppBadge = ' <span class="badge badge-warning" title="Clears the 54.5% 6-pick Flex breakeven, not 2-pick Power">FLEX</span>';
-                    } else {
-                        ppBadge = ' <span class="badge badge-primary" title="Below every PrizePicks breakeven — skip">✗</span>';
-                    }
-                }
+                // Flex badge: green = clears the 54.5% 6-pick Flex breakeven
+                const ppBadge = item.true_probability >= PP_FLEX_BREAKEVEN
+                    ? ' <span class="badge badge-success" title="Clears the 54.5% 6-pick Flex breakeven">FLEX ✓</span>'
+                    : ' <span class="badge badge-primary" title="Below the 6-pick Flex breakeven — skip">✗</span>';
 
                 // Sharp books disagreeing with each other = unstable/mismatched line
                 const spread = sharpSpread(item);
@@ -703,7 +668,6 @@
                         <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
                         <td>${item.selection || '-'}</td>
-                        <td><strong>${formatOdds(item.target_odds)}</strong> <span style="color: var(--muted); font-size: 11px;">${escapeHtml(item.target_book || '')}</span></td>
                         ${sharpCell(item, 'pinnacle')}
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
@@ -783,13 +747,8 @@
         function edgeCell(item, warnHtml = '') {
             const v = item.edge;
             if (v === null || v === undefined) return `<td>-${warnHtml}</td>`;
-            const isPP = (item.target_book || '').toLowerCase() === 'prizepicks';
             const cls = v > 0 ? 'ev-positive' : 'ev-negative';
-            const unit = isPP ? 'pp' : '%';
-            const tip = isPP
-                ? 'True prob minus the 54.5% per-leg 6-flex breakeven'
-                : 'EV% after Kalshi trading fees (0.07 × P × (1−P) per contract)';
-            return `<td class="ev-value ${cls}" title="${tip}">${v > 0 ? '+' : ''}${v.toFixed(1)}${unit}${warnHtml}</td>`;
+            return `<td class="ev-value ${cls}" title="True prob minus the 54.5% per-leg 6-flex breakeven">${v > 0 ? '+' : ''}${v.toFixed(1)}pp${warnHtml}</td>`;
         }
 
         function escapeHtml(text) {

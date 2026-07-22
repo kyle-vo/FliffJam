@@ -32,12 +32,6 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/spreads')
-def spreads():
-    """Serve the spreads view page."""
-    return render_template('spreads.html')
-
-
 @app.route('/slips')
 def slips():
     """Serve the slip builder page."""
@@ -88,6 +82,10 @@ def _compute_opportunities():
 
     opportunities = calculate_ev_multi_from_data(target_markets, sharp_markets, matched)
 
+    # PrizePicks-only product: drop anything else (e.g. stale kalshi cache rows)
+    opportunities = [o for o in opportunities
+                     if (o.get('target_book') or '').lower() == 'prizepicks']
+
     # Drop live/already-started games
     now = datetime.now(timezone.utc)
 
@@ -113,28 +111,12 @@ def _compute_opportunities():
         sharp_odds = opp.get('sharp_odds', 0)
         opp['value'] = odds_to_scale(target_odds) - odds_to_scale(sharp_odds)
 
-    # Edge: the number that actually decides money, per book.
-    # - Kalshi: fee-adjusted EV%. Kalshi charges ~0.07*P*(1-P) per contract,
-    #   worst near coin-flips, so raw EV overstates the edge.
-    # - PrizePicks: you're paid flex/power multipliers, not the quoted odds.
-    #   Edge = true prob minus the ~54.5%/leg 6-flex breakeven, in prob points.
+    # Edge: PrizePicks pays flex multipliers, not odds. Edge = true prob minus
+    # the ~54.5%/leg 6-flex breakeven, in probability points.
     PP_FLEX_BREAKEVEN = 0.545
     for opp in opportunities:
-        book = (opp.get('target_book') or '').lower()
         true_prob = opp.get('true_probability')
-        target_decimal = opp.get('target_decimal')
-        if true_prob is None:
-            opp['edge'] = None
-            continue
-        if book == 'kalshi' and target_decimal:
-            price = 1.0 / target_decimal            # contract price in $
-            fee = 0.07 * price * (1.0 - price)      # Kalshi trading fee
-            effective_decimal = 1.0 / (price + fee)
-            opp['edge'] = (true_prob * effective_decimal - 1.0) * 100
-        elif book == 'prizepicks':
-            opp['edge'] = (true_prob - PP_FLEX_BREAKEVEN) * 100
-        else:
-            opp['edge'] = opp.get('ev_percent')
+        opp['edge'] = None if true_prob is None else (true_prob - PP_FLEX_BREAKEVEN) * 100
 
     # Readable type + sport labels
     type_mapping = {
@@ -183,9 +165,9 @@ def _compute_opportunities():
 
 @app.route('/api/ev')
 def get_ev_opportunities():
-    """Player props + moneylines with EV/edge (spreads have their own tab)."""
+    """PrizePicks player props with flex-breakeven edge."""
     try:
-        opportunities = [o for o in _compute_opportunities() if o.get('market_key') != 'spreads']
+        opportunities = _compute_opportunities()
         positive_ev = [o for o in opportunities if o['ev'] > 0]
         logger.info(f"Found {len(positive_ev)} positive EV opportunities out of {len(opportunities)} total")
         return jsonify({
@@ -262,27 +244,6 @@ def export_csv():
     except Exception as e:
         logger.error(f"Error exporting CSV: {e}", exc_info=True)
         return str(e), 500
-
-
-@app.route('/api/spreads')
-def get_spreads():
-    """Kalshi spread bets vs sharp consensus, same shape as /api/ev."""
-    try:
-        opportunities = [o for o in _compute_opportunities() if o.get('market_key') == 'spreads']
-        positive_ev = [o for o in opportunities if o['ev'] > 0]
-        logger.info(f"Spreads: {len(positive_ev)} positive EV of {len(opportunities)} total")
-        return jsonify({
-            'success': True,
-            'count': len(opportunities),
-            'positive_ev_count': len(positive_ev),
-            'fetched_at': _get_fetched_at(),
-            'opportunities': opportunities
-        })
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e), 'opportunities': []}), 200
-    except Exception as e:
-        logger.error(f"Error fetching spreads: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e), 'opportunities': []}), 500
 
 
 @app.route('/api/health')

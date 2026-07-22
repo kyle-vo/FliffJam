@@ -13,12 +13,11 @@
         <header>
             <div class="logo-mark">🎯</div>
             <h1>FLIFF<span>JAM</span></h1>
-            <p>Kalshi &amp; PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+            <p>PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
         </header>
 
         <div class="nav-tabs">
             <a href="/" class="nav-tab">🏀 Player Props</a>
-            <a href="/spreads" class="nav-tab">📊 Spreads View</a>
             <a href="/slips" class="nav-tab active">🎟️ Slip Builder</a>
             <a href="/results" class="nav-tab">📈 Results</a>
         </div>
@@ -30,7 +29,7 @@
             </div>
             <div class="filter-group">
                 <span style="color: var(--muted); font-size: 0.82em;">
-                    PrizePicks legs from de-vigged sharp consensus · cross-game guarded · +EV slips only
+                    6-man flex slips from de-vigged sharp consensus · cross-game guarded · +EV only
                 </span>
             </div>
         </div>
@@ -275,41 +274,11 @@
                         <div class="slip-ev">
                             <div class="big ev-positive">+${(f.ev * 100).toFixed(1)}% EV</div>
                             <div class="sub">6/6: ${(f.dp[6] * 100).toFixed(1)}% · 5/6: ${(f.dp[5] * 100).toFixed(1)}% · 4/6: ${(f.dp[4] * 100).toFixed(1)}%</div>
-                            ${trackBtn('flex', idx, f.legs)}
-                        </div>
-                    </div>
-                `).join('');
-            }
-
-            // ---- Top 2-man powers: +EV only, up to 5 ----
-            const legs = pool.slice(0, 15);
-            const pairs = [];
-            for (let a = 0; a < legs.length; a++) {
-                for (let b = a + 1; b < legs.length; b++) {
-                    if (legs[a].event === legs[b].event) continue;
-                    if (legs[a].player === legs[b].player) continue;
-                    const combined = legs[a].true_probability * legs[b].true_probability;
-                    const ev = 3 * combined - 1;
-                    if (ev > 0) pairs.push({ legs: [legs[a], legs[b]], combined, ev });
-                }
-            }
-            pairs.sort((x, y) => y.ev - x.ev);
-            const topPairs = pairs.slice(0, 5);
-
-            renderedPairs = topPairs;
-            if (topPairs.length > 0) {
-                html += '<div class="section-label">Top 2-Man Power (3x)</div>';
-                html += topPairs.map((s, idx) => `
-                    <div class="slip-card pos">
-                        <div>
-                            <span class="slip-num">#${idx + 1}</span>
-                            ${legHtml(s.legs[0])}
-                            ${legHtml(s.legs[1])}
-                        </div>
-                        <div class="slip-ev">
-                            <div class="big ev-positive">+${(s.ev * 100).toFixed(1)}% EV</div>
-                            <div class="sub">${(s.combined * 100).toFixed(1)}% both hit</div>
-                            ${trackBtn('pair', idx, s.legs)}
+                            <div style="display:flex; gap:6px; justify-content:flex-end;">
+                                ${trackBtn('flex', idx, f.legs)}
+                                <a href="https://app.prizepicks.com/" target="_blank" rel="noopener"
+                                   class="btn btn-primary" style="padding:5px 12px; margin-top:6px;">Bet on PP ↗</a>
+                            </div>
                         </div>
                     </div>
                 `).join('');
