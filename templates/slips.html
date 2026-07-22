@@ -184,7 +184,38 @@
 
         // ---- Slip tracking (shared with Results page via localStorage) ----
         let renderedFlexes = [];
+        let renderedFades = [];
         let renderedPairs = [];
+
+        // Mirror a slip: flip every leg's side, complement its probability
+        // (the consensus is de-vigged/two-sided, so 1-p is the fair flip).
+        function buildFade(flex) {
+            const legs = flex.legs.map(l => ({
+                ...l,
+                selection: (l.selection || '').toLowerCase() === 'over' ? 'Under' : 'Over',
+                true_probability: 1 - l.true_probability
+            }));
+            let dp = [1];
+            for (const l of legs) {
+                const p = l.true_probability;
+                const next = new Array(dp.length + 1).fill(0);
+                for (let k = 0; k < dp.length; k++) {
+                    next[k] += dp[k] * (1 - p);
+                    next[k + 1] += dp[k] * p;
+                }
+                dp = next;
+            }
+            let ev = -1;
+            for (const [hits, mult] of Object.entries(FLEX6_PAYOUTS)) {
+                ev += dp[parseInt(hits)] * mult;
+            }
+            return { legs, dp, ev };
+        }
+
+        function toggleFade(idx) {
+            const el = document.getElementById(`fade-${idx}`);
+            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
 
         function getTrackedSlips() {
             const t = localStorage.getItem('trackedSlips');
@@ -203,7 +234,9 @@
         }
 
         function toggleSlipTrack(kind, idx) {
-            const slip = kind === 'flex' ? renderedFlexes[idx] : renderedPairs[idx];
+            const slip = kind === 'flex' ? renderedFlexes[idx]
+                : kind === 'fade' ? renderedFades[idx]
+                : renderedPairs[idx];
             if (!slip) return;
             const id = slipId(kind, slip.legs);
             const tracked = getTrackedSlips();
@@ -212,7 +245,7 @@
             } else {
                 tracked[id] = {
                     ts: Date.now(),
-                    kind: kind === 'flex' ? '6-flex' : '2-power',
+                    kind: kind === 'pair' ? '2-power' : '6-flex',
                     ev: slip.ev,
                     legs: slip.legs.map(l => ({
                         player: l.player,
@@ -227,7 +260,14 @@
                 };
             }
             saveTrackedSlips(tracked);
-            renderSlips();  // refresh button states
+            // Re-render to refresh button states, keeping any open fade panels open
+            const openFades = [...document.querySelectorAll('[id^="fade-"]')]
+                .filter(el => el.style.display !== 'none').map(el => el.id);
+            renderSlips();
+            openFades.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'block';
+            });
         }
 
         function trackBtn(kind, idx, legs) {
@@ -263,10 +303,13 @@
             }
 
             renderedFlexes = flexes;
+            renderedFades = flexes.map(buildFade);
             if (flexes.length > 0) {
                 html += '<div class="section-label">Best 6-Man Flex (25x / 2x / 0.4x)</div>';
-                html += flexes.map((f, idx) => `
-                    <div class="slip-card pos">
+                html += flexes.map((f, idx) => {
+                    const fade = renderedFades[idx];
+                    return `
+                    <div class="slip-card pos" style="flex-wrap: wrap;">
                         <div>
                             <span class="slip-num">#${idx + 1}</span>
                             ${f.legs.map(legHtml).join('')}
@@ -276,12 +319,32 @@
                             <div class="sub">6/6: ${(f.dp[6] * 100).toFixed(1)}% · 5/6: ${(f.dp[5] * 100).toFixed(1)}% · 4/6: ${(f.dp[4] * 100).toFixed(1)}%</div>
                             <div style="display:flex; gap:6px; justify-content:flex-end;">
                                 ${trackBtn('flex', idx, f.legs)}
+                                <button class="btn btn-secondary" style="padding:5px 12px; margin-top:6px;"
+                                        title="Show the exact opposite slip (every leg flipped)"
+                                        onclick="toggleFade(${idx})">Fade ↩</button>
                                 <a href="https://app.prizepicks.com/" target="_blank" rel="noopener"
                                    class="btn btn-primary" style="padding:5px 12px; margin-top:6px;">Bet on PP ↗</a>
                             </div>
                         </div>
-                    </div>
-                `).join('');
+                        <div id="fade-${idx}" style="display:none; flex-basis:100%; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:15px;">
+                                <div>
+                                    <span class="slip-num">FADE — every leg flipped</span>
+                                    ${fade.legs.map(legHtml).join('')}
+                                </div>
+                                <div class="slip-ev">
+                                    <div class="big ${fade.ev > 0 ? 'ev-positive' : 'ev-negative'}">${fade.ev > 0 ? '+' : ''}${(fade.ev * 100).toFixed(1)}% EV</div>
+                                    <div class="sub">6/6: ${(fade.dp[6] * 100).toFixed(1)}% · 5/6: ${(fade.dp[5] * 100).toFixed(1)}% · 4/6: ${(fade.dp[4] * 100).toFixed(1)}%</div>
+                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+                                        ${trackBtn('fade', idx, fade.legs)}
+                                        <a href="https://app.prizepicks.com/" target="_blank" rel="noopener"
+                                           class="btn btn-primary" style="padding:5px 12px; margin-top:6px;">Bet on PP ↗</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
             }
 
             if (!html) {
