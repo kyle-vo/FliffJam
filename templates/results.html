@@ -13,12 +13,12 @@
         <header>
             <div class="logo-mark">🎯</div>
             <h1>FLIFF<span>JAM</span></h1>
-            <p>PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+            <p>Fliff vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
         </header>
 
         <div class="nav-tabs">
             <a href="/" class="nav-tab">🏀 Player Props</a>
-            <a href="/slips" class="nav-tab">🎟️ Slip Builder</a>
+            <a href="/slips" class="nav-tab">🎟️ Parlay Builder</a>
             <a href="/results" class="nav-tab active">📈 Results</a>
         </div>
 
@@ -119,12 +119,27 @@
             render();
         }
 
-        // ---- Tracked slips (written by the Slip Builder page) ----
-        // Payout multipliers by graded outcome
+        // ---- Tracked slips (written by the Parlay Builder page) ----
+        // Payout multipliers by graded outcome. Parlays carry their own
+        // payout (product of Fliff decimal odds) on the entry.
         const SLIP_PAYOUTS = {
             '6-flex': { '6': 25, '5': 2, '4': 0.4, '0': 0 },
             '2-power': { 'w': 3, 'l': 0 }
         };
+
+        function payoutFor(entry, outcome) {
+            if (entry.kind === 'parlay') return outcome === 'w' ? (entry.payout || 0) : 0;
+            return (SLIP_PAYOUTS[entry.kind] || {})[outcome] ?? 0;
+        }
+
+        function kindLabel(entry) {
+            if (entry.kind === 'parlay') {
+                const dec = entry.payout || 1;
+                const am = dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
+                return `${entry.legs.length}-Leg Parlay (${am > 0 ? '+' : ''}${am})`;
+            }
+            return entry.kind === '6-flex' ? '6-Man Flex' : '2-Man Power';
+        }
 
         function getTrackedSlips() {
             const t = localStorage.getItem('trackedSlips');
@@ -169,7 +184,7 @@
                 const e = tracked[id];
                 if (e.outcome !== null && e.outcome !== undefined) {
                     settled++;
-                    returned += (SLIP_PAYOUTS[e.kind] || {})[e.outcome] ?? 0;
+                    returned += payoutFor(e, e.outcome);
                 }
             }
             const roi = settled > 0 ? ((returned - settled) / settled * 100) : null;
@@ -197,9 +212,9 @@
                     : btn('w', 'W', 'green') + btn('l', 'L', 'red');
 
                 return `
-                    <div class="slip-card ${e.outcome === null || e.outcome === undefined ? '' : ((SLIP_PAYOUTS[e.kind] || {})[e.outcome] > 1 ? 'pos' : 'neg')}">
+                    <div class="slip-card ${e.outcome === null || e.outcome === undefined ? '' : (payoutFor(e, e.outcome) > 1 ? 'pos' : 'neg')}">
                         <div>
-                            <span class="slip-num">${when} · ${e.kind === '6-flex' ? '6-Man Flex' : '2-Man Power'} · +${(e.ev * 100).toFixed(1)}% EV at track</span>
+                            <span class="slip-num">${when} · ${kindLabel(e)} · ${e.ev > 0 ? '+' : ''}${(e.ev * 100).toFixed(1)}% EV at track</span>
                             ${legsHtml}
                         </div>
                         <div class="slip-ev" style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">

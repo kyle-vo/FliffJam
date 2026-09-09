@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FliffJam - Slip Builder</title>
+    <title>FliffJam - Parlay Builder</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
@@ -13,12 +13,12 @@
         <header>
             <div class="logo-mark">🎯</div>
             <h1>FLIFF<span>JAM</span></h1>
-            <p>PrizePicks vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+            <p>Fliff vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
         </header>
 
         <div class="nav-tabs">
             <a href="/" class="nav-tab">🏀 Player Props</a>
-            <a href="/slips" class="nav-tab active">🎟️ Slip Builder</a>
+            <a href="/slips" class="nav-tab active">🎟️ Parlay Builder</a>
             <a href="/results" class="nav-tab">📈 Results</a>
         </div>
 
@@ -29,14 +29,14 @@
             </div>
             <div class="filter-group">
                 <span style="color: var(--muted); font-size: 0.82em;">
-                    6-man flex slips from de-vigged sharp consensus · cross-game guarded · +EV only
+                    Parlays of +EV Fliff legs · cross-game only · EV compounds when every leg is +EV
                 </span>
             </div>
         </div>
 
         <div id="loading" class="loading">
             <div class="loading-spinner"></div>
-            <div>Building slips...</div>
+            <div>Building parlays...</div>
         </div>
 
         <div id="error" class="error" style="display: none;"></div>
@@ -44,16 +44,14 @@
         <div id="slipsContent" style="display: none; padding: 10px 28px 30px;"></div>
 
         <div id="noData" class="no-data" style="display: none;">
-            No positive-EV slips on the current board. That's the tool protecting your bankroll — check back after lines refresh.
+            No positive-EV parlays on the current board — not enough +EV Fliff legs across different games. Check back after lines refresh.
         </div>
     </div>
 
     <script>
         let allData = [];
         let fetchedAt = null;
-
-        // PrizePicks breakevens / payouts
-        const FLEX6_PAYOUTS = { 6: 25, 5: 2, 4: 0.4 };
+        const FLIFF_URL = 'https://sports.getfliff.com/';
 
         window.addEventListener('DOMContentLoaded', loadData);
         setInterval(updateDataAge, 60000);
@@ -98,8 +96,19 @@
             }
         }
 
+        // ---- odds helpers ----
         function oddsToScale(americanOdds) {
             return americanOdds < 0 ? americanOdds + 100 : americanOdds - 100;
+        }
+
+        function formatOdds(odds) {
+            if (odds === null || odds === undefined) return '—';
+            return odds > 0 ? `+${odds}` : `${odds}`;
+        }
+
+        function decimalToAmerican(dec) {
+            if (!dec || dec <= 1) return null;
+            return dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
         }
 
         function sharpSpread(item) {
@@ -112,63 +121,10 @@
             return Math.max(...vals) - Math.min(...vals);
         }
 
-        function slipLegPool() {
-            const now = Date.now();
-            const base = allData.filter(i =>
-                (i.target_book || '').toLowerCase() === 'prizepicks' &&
-                i.true_probability !== null && i.true_probability !== undefined &&
-                (!i.commence_time || new Date(i.commence_time) > now)
-            );
-            let candidates = base.filter(i => sharpSpread(i) <= 40);
-            if (candidates.length < 6) candidates = base;
-
-            const bestPerPlayer = {};
-            for (const c of candidates) {
-                const key = `${c.player}_${c.market_key}`;
-                if (!bestPerPlayer[key] || c.true_probability > bestPerPlayer[key].true_probability) {
-                    bestPerPlayer[key] = c;
-                }
-            }
-            return Object.values(bestPerPlayer)
-                .sort((a, b) => b.true_probability - a.true_probability);
-        }
-
-        // Greedy 6-flex from a pool: max 2 legs/game, one square per player.
-        function buildSixFlex(pool) {
-            const chosen = [];
-            const perEvent = {};
-            const usedPlayers = new Set();
-            for (const l of pool) {
-                if ((perEvent[l.event] || 0) >= 2) continue;
-                if (usedPlayers.has(l.player)) continue;
-                chosen.push(l);
-                usedPlayers.add(l.player);
-                perEvent[l.event] = (perEvent[l.event] || 0) + 1;
-                if (chosen.length === 6) break;
-            }
-            if (chosen.length < 6) return null;
-
-            // dp[k] = P(exactly k legs hit) — Poisson-binomial
-            let dp = [1];
-            for (const l of chosen) {
-                const p = l.true_probability;
-                const next = new Array(dp.length + 1).fill(0);
-                for (let k = 0; k < dp.length; k++) {
-                    next[k] += dp[k] * (1 - p);
-                    next[k + 1] += dp[k] * p;
-                }
-                dp = next;
-            }
-            let ev = -1;
-            for (const [hits, mult] of Object.entries(FLEX6_PAYOUTS)) {
-                ev += dp[parseInt(hits)] * mult;
-            }
-            return { legs: chosen, dp, ev };
-        }
-
         function formatMarketKey(key) {
             const map = {
-                'h2h': 'ML', 'player_points': 'Points', 'player_rebounds': 'Rebounds',
+                'h2h': 'ML', 'spreads': 'Spread',
+                'player_points': 'Points', 'player_rebounds': 'Rebounds',
                 'player_assists': 'Assists', 'player_points_assists': 'Pts + Ast',
                 'player_points_rebounds': 'Pts + Reb',
                 'pitcher_strikeouts': 'Strikeouts', 'batter_total_bases': 'Total Bases'
@@ -178,51 +134,91 @@
 
         function escapeHtml(text) {
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = text ?? '';
             return div.innerHTML;
         }
 
-        // ---- Slip tracking (shared with Results page via localStorage) ----
-        let renderedFlexes = [];
-        let renderedFades = [];
-        let renderedPairs = [];
+        // ---- leg pool: +EV Fliff legs, upcoming, sharp books agreeing ----
+        function parlayLegPool() {
+            const now = Date.now();
+            const base = allData.filter(i =>
+                i.ev > 0 &&
+                i.target_decimal && i.true_probability !== null && i.true_probability !== undefined &&
+                (!i.commence_time || new Date(i.commence_time) > now)
+            );
+            let candidates = base.filter(i => sharpSpread(i) <= 40);
+            if (candidates.length < 4) candidates = base;
 
-        // Mirror a slip: flip every leg's side, complement its probability
-        // (the consensus is de-vigged/two-sided, so 1-p is the fair flip).
-        function buildFade(flex) {
-            const legs = flex.legs.map(l => ({
-                ...l,
-                selection: (l.selection || '').toLowerCase() === 'over' ? 'Under' : 'Over',
-                true_probability: 1 - l.true_probability
-            }));
-            let dp = [1];
+            // One best pick per player+market (never both sides of a line)
+            const best = {};
+            for (const c of candidates) {
+                const key = `${c.event}_${c.player}_${c.market_key}`;
+                if (!best[key] || c.ev > best[key].ev) best[key] = c;
+            }
+            return Object.values(best).sort((a, b) => b.ev - a.ev);
+        }
+
+        // Parlay math: independent legs multiply. EV = Π(dec_i × p_i) − 1.
+        function scoreParlay(legs) {
+            let payout = 1, hit = 1;
+            for (const l of legs) { payout *= l.target_decimal; hit *= l.true_probability; }
+            return { legs, payout, hit, ev: payout * hit - 1 };
+        }
+
+        function distinctGamesAndPlayers(legs) {
+            const events = new Set(), players = new Set();
             for (const l of legs) {
-                const p = l.true_probability;
-                const next = new Array(dp.length + 1).fill(0);
-                for (let k = 0; k < dp.length; k++) {
-                    next[k] += dp[k] * (1 - p);
-                    next[k + 1] += dp[k] * p;
+                if (events.has(l.event) || players.has(l.player)) return false;
+                events.add(l.event); players.add(l.player);
+            }
+            return true;
+        }
+
+        function buildParlays(pool, size, fromTop, keep) {
+            const legs = pool.slice(0, fromTop);
+            const out = [];
+            const pick = (start, chosen) => {
+                if (chosen.length === size) {
+                    if (distinctGamesAndPlayers(chosen)) {
+                        const s = scoreParlay(chosen);
+                        if (s.ev > 0) out.push(s);
+                    }
+                    return;
                 }
-                dp = next;
-            }
-            let ev = -1;
-            for (const [hits, mult] of Object.entries(FLEX6_PAYOUTS)) {
-                ev += dp[parseInt(hits)] * mult;
-            }
-            return { legs, dp, ev };
+                for (let i = start; i < legs.length; i++) pick(i + 1, [...chosen, legs[i]]);
+            };
+            pick(0, []);
+            out.sort((a, b) => b.ev - a.ev);
+            return out.slice(0, keep);
         }
 
-        function toggleFade(idx) {
-            const el = document.getElementById(`fade-${idx}`);
-            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        // ---- fade: the exact opposite side of every leg, priced at Fliff ----
+        function oppositeLeg(leg) {
+            const isProp = !!leg.selection;
+            return allData.find(o =>
+                o.event === leg.event && o.market_key === leg.market_key &&
+                o.commence_time === leg.commence_time &&
+                (isProp
+                    ? (o.player === leg.player && o.line === leg.line &&
+                       o.selection && o.selection.toLowerCase() !== leg.selection.toLowerCase())
+                    : (o.player !== leg.player))
+            ) || null;
         }
 
-        // Fade button: PrizePicks opens in a new tab (via the anchor's href);
-        // this just makes sure the flipped legs are visible to enter from.
+        function buildFade(parlay) {
+            const legs = parlay.legs.map(oppositeLeg);
+            if (legs.some(l => !l)) return null;  // Fliff doesn't price every other side
+            return scoreParlay(legs);
+        }
+
         function showFade(idx) {
             const el = document.getElementById(`fade-${idx}`);
             if (el) el.style.display = 'block';
         }
+
+        // ---- tracking (shared with Results page via localStorage) ----
+        let rendered = [];   // [{kind:'parlay', ...score}]
+        let renderedFades = [];
 
         function getTrackedSlips() {
             const t = localStorage.getItem('trackedSlips');
@@ -233,27 +229,25 @@
             localStorage.setItem('trackedSlips', JSON.stringify(t));
         }
 
-        function slipId(kind, legs) {
-            return kind + '|' + legs
-                .map(l => `${l.player}_${l.market_key}_${l.line}_${l.selection}`)
-                .sort()
-                .join('|');
+        function slipId(legs) {
+            return 'parlay|' + legs
+                .map(l => `${l.event}_${l.player}_${l.market_key}_${l.line}_${l.selection}`)
+                .sort().join('|');
         }
 
         function toggleSlipTrack(kind, idx) {
-            const slip = kind === 'flex' ? renderedFlexes[idx]
-                : kind === 'fade' ? renderedFades[idx]
-                : renderedPairs[idx];
+            const slip = kind === 'fade' ? renderedFades[idx] : rendered[idx];
             if (!slip) return;
-            const id = slipId(kind, slip.legs);
+            const id = slipId(slip.legs);
             const tracked = getTrackedSlips();
             if (tracked[id]) {
                 delete tracked[id];
             } else {
                 tracked[id] = {
                     ts: Date.now(),
-                    kind: kind === 'pair' ? '2-power' : '6-flex',
+                    kind: 'parlay',
                     ev: slip.ev,
+                    payout: slip.payout,
                     legs: slip.legs.map(l => ({
                         player: l.player,
                         selection: l.selection,
@@ -261,24 +255,24 @@
                         type: formatMarketKey(l.market_key),
                         event: l.event,
                         sport: l.sport || '',
-                        prob: l.true_probability
+                        prob: l.true_probability,
+                        odds: l.target_odds
                     })),
                     outcome: null
                 };
             }
             saveTrackedSlips(tracked);
-            // Re-render to refresh button states, keeping any open fade panels open
             const openFades = [...document.querySelectorAll('[id^="fade-"]')]
                 .filter(el => el.style.display !== 'none').map(el => el.id);
             renderSlips();
-            openFades.forEach(id => {
-                const el = document.getElementById(id);
+            openFades.forEach(fid => {
+                const el = document.getElementById(fid);
                 if (el) el.style.display = 'block';
             });
         }
 
         function trackBtn(kind, idx, legs) {
-            const isTracked = !!getTrackedSlips()[slipId(kind, legs)];
+            const isTracked = !!getTrackedSlips()[slipId(legs)];
             return `<button class="btn btn-secondary" style="padding:5px 12px; margin-top:6px; ${isTracked ? 'border-color:var(--green); color:var(--green);' : ''}"
                 onclick="toggleSlipTrack('${kind}', ${idx})">${isTracked ? '✓ Tracked' : '+ Track'}</button>`;
         }
@@ -287,70 +281,69 @@
             <div class="slip-leg">
                 <span class="badge badge-primary" style="margin-right:4px;">${escapeHtml(l.sport || '')}</span>
                 <strong>${escapeHtml(l.player)}</strong>
-                ${l.selection || ''} ${l.line !== null ? l.line : ''} ${formatMarketKey(l.market_key)}
+                ${l.selection || ''} ${l.line !== null && l.line !== undefined ? (l.market_key === 'spreads' && l.line > 0 ? '+' : '') + l.line : ''} ${formatMarketKey(l.market_key)}
+                <strong style="margin-left:4px;">${formatOdds(l.target_odds)}</strong>
                 <span class="meta">(${escapeHtml(l.event)}, ${(l.true_probability * 100).toFixed(1)}%)</span>
             </div>`;
+
+        function cardHtml(p, idx) {
+            const fade = renderedFades[idx];
+            return `
+                <div class="slip-card pos" style="flex-wrap: wrap;">
+                    <div>
+                        <span class="slip-num">#${idx + 1} · ${p.legs.length}-leg · pays ${formatOdds(decimalToAmerican(p.payout))}</span>
+                        ${p.legs.map(legHtml).join('')}
+                    </div>
+                    <div class="slip-ev">
+                        <div class="big ev-positive">+${(p.ev * 100).toFixed(1)}% EV</div>
+                        <div class="sub">${(p.hit * 100).toFixed(1)}% to hit · ${p.payout.toFixed(2)}x</div>
+                        <div style="display:flex; gap:6px; justify-content:flex-end;">
+                            ${trackBtn('parlay', idx, p.legs)}
+                            ${fade ? `<a href="${FLIFF_URL}" target="_blank" rel="noopener" class="btn btn-primary"
+                                   style="padding:5px 12px; margin-top:6px;" title="Opens Fliff and shows the flipped legs below"
+                                   onclick="showFade(${idx})">Fade ↗</a>` : ''}
+                            <a href="${FLIFF_URL}" target="_blank" rel="noopener" class="btn btn-primary"
+                               style="padding:5px 12px; margin-top:6px;">Bet on Fliff ↗</a>
+                        </div>
+                    </div>
+                    ${fade ? `
+                    <div id="fade-${idx}" style="display:none; flex-basis:100%; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:15px;">
+                            <div>
+                                <span class="slip-num">FADE — every leg flipped · pays ${formatOdds(decimalToAmerican(fade.payout))}</span>
+                                ${fade.legs.map(legHtml).join('')}
+                            </div>
+                            <div class="slip-ev">
+                                <div class="big ${fade.ev > 0 ? 'ev-positive' : 'ev-negative'}">${fade.ev > 0 ? '+' : ''}${(fade.ev * 100).toFixed(1)}% EV</div>
+                                <div class="sub">${(fade.hit * 100).toFixed(1)}% to hit · ${fade.payout.toFixed(2)}x</div>
+                                <div style="display:flex; gap:6px; justify-content:flex-end;">
+                                    ${trackBtn('fade', idx, fade.legs)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>` : ''}
+                </div>`;
+        }
 
         function renderSlips() {
             const content = document.getElementById('slipsContent');
             const noData = document.getElementById('noData');
-            const pool = slipLegPool();
+            const pool = parlayLegPool();
+
+            const twos = buildParlays(pool, 2, 15, 5);
+            const threes = buildParlays(pool, 3, 12, 3);
+            rendered = [...threes, ...twos];
+            renderedFades = rendered.map(buildFade);
 
             let html = '';
-
-            // ---- Top 6-man flexes: disjoint slips, +EV only, up to 3 ----
-            const flexes = [];
-            let remaining = [...pool];
-            for (let n = 0; n < 3; n++) {
-                const flex = buildSixFlex(remaining);
-                if (!flex || flex.ev <= 0) break;
-                flexes.push(flex);
-                const used = new Set(flex.legs.map(l => `${l.player}_${l.market_key}`));
-                remaining = remaining.filter(l => !used.has(`${l.player}_${l.market_key}`));
+            let idx = 0;
+            if (threes.length) {
+                html += '<div class="section-label">Best 3-Leg Parlays</div>';
+                html += threes.map(p => cardHtml(p, idx++)).join('');
             }
-
-            renderedFlexes = flexes;
-            renderedFades = flexes.map(buildFade);
-            if (flexes.length > 0) {
-                html += '<div class="section-label">Best 6-Man Flex (25x / 2x / 0.4x)</div>';
-                html += flexes.map((f, idx) => {
-                    const fade = renderedFades[idx];
-                    return `
-                    <div class="slip-card pos" style="flex-wrap: wrap;">
-                        <div>
-                            <span class="slip-num">#${idx + 1}</span>
-                            ${f.legs.map(legHtml).join('')}
-                        </div>
-                        <div class="slip-ev">
-                            <div class="big ev-positive">+${(f.ev * 100).toFixed(1)}% EV</div>
-                            <div class="sub">6/6: ${(f.dp[6] * 100).toFixed(1)}% · 5/6: ${(f.dp[5] * 100).toFixed(1)}% · 4/6: ${(f.dp[4] * 100).toFixed(1)}%</div>
-                            <div style="display:flex; gap:6px; justify-content:flex-end;">
-                                ${trackBtn('flex', idx, f.legs)}
-                                <a href="https://www.prizepicks.com/" target="_blank" rel="noopener"
-                                   class="btn btn-primary" style="padding:5px 12px; margin-top:6px;"
-                                   title="Opens PrizePicks and shows the flipped legs below to enter"
-                                   onclick="showFade(${idx})">Fade ↗</a>
-                                <a href="https://www.prizepicks.com/" target="_blank" rel="noopener"
-                                   class="btn btn-primary" style="padding:5px 12px; margin-top:6px;">Bet on PP ↗</a>
-                            </div>
-                        </div>
-                        <div id="fade-${idx}" style="display:none; flex-basis:100%; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; gap:15px;">
-                                <div>
-                                    <span class="slip-num">FADE — every leg flipped</span>
-                                    ${fade.legs.map(legHtml).join('')}
-                                </div>
-                                <div class="slip-ev">
-                                    <div class="big ${fade.ev > 0 ? 'ev-positive' : 'ev-negative'}">${fade.ev > 0 ? '+' : ''}${(fade.ev * 100).toFixed(1)}% EV</div>
-                                    <div class="sub">6/6: ${(fade.dp[6] * 100).toFixed(1)}% · 5/6: ${(fade.dp[5] * 100).toFixed(1)}% · 4/6: ${(fade.dp[4] * 100).toFixed(1)}%</div>
-                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
-                                        ${trackBtn('fade', idx, fade.legs)}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('');
+            if (twos.length) {
+                html += '<div class="section-label">Best 2-Leg Parlays</div>';
+                html += twos.map(p => cardHtml(p, idx++)).join('');
             }
 
             if (!html) {
@@ -358,7 +351,6 @@
                 content.style.display = 'none';
                 return;
             }
-
             content.innerHTML = html;
             content.style.display = 'block';
             noData.style.display = 'none';

@@ -82,9 +82,9 @@ def _compute_opportunities():
 
     opportunities = calculate_ev_multi_from_data(target_markets, sharp_markets, matched)
 
-    # PrizePicks-only product: drop anything else (e.g. stale kalshi cache rows)
+    # Fliff-only product: drop anything else (e.g. stale cache rows)
     opportunities = [o for o in opportunities
-                     if (o.get('target_book') or '').lower() == 'prizepicks']
+                     if (o.get('target_book') or '').lower() == 'fliff']
 
     # Drop live/already-started games
     now = datetime.now(timezone.utc)
@@ -111,12 +111,10 @@ def _compute_opportunities():
         sharp_odds = opp.get('sharp_odds', 0)
         opp['value'] = odds_to_scale(target_odds) - odds_to_scale(sharp_odds)
 
-    # Edge: PrizePicks pays flex multipliers, not odds. Edge = true prob minus
-    # the ~54.5%/leg 6-flex breakeven, in probability points.
-    PP_FLEX_BREAKEVEN = 0.545
+    # Edge: Fliff is a real sportsbook paying its quoted odds with no
+    # per-bet fee, so edge is plain EV% against the consensus probability.
     for opp in opportunities:
-        true_prob = opp.get('true_probability')
-        opp['edge'] = None if true_prob is None else (true_prob - PP_FLEX_BREAKEVEN) * 100
+        opp['edge'] = opp.get('ev_percent')
 
     # Readable type + sport labels
     type_mapping = {
@@ -165,7 +163,7 @@ def _compute_opportunities():
 
 @app.route('/api/ev')
 def get_ev_opportunities():
-    """PrizePicks player props with flex-breakeven edge."""
+    """Fliff markets (props, moneylines, spreads) with EV edge."""
     try:
         opportunities = _compute_opportunities()
         positive_ev = [o for o in opportunities if o['ev'] > 0]

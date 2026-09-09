@@ -34,7 +34,7 @@ current_key_index = 0
 # Books you actually bet on (kalshi = exchange, prizepicks = DFS) vs the sharp
 # books whose de-vigged lines act as "true" probability. Priority order of
 # SHARP_BOOKMAKERS matters: matching prefers the first book that has the line.
-TARGET_BOOKMAKERS = [b.strip() for b in os.getenv('TARGET_BOOKMAKERS', 'prizepicks').split(',') if b.strip()]
+TARGET_BOOKMAKERS = [b.strip() for b in os.getenv('TARGET_BOOKMAKERS', 'fliff').split(',') if b.strip()]
 SHARP_BOOKMAKERS = [b.strip() for b in os.getenv('SHARP_BOOKMAKERS', 'pinnacle,draftkings,fanduel').split(',') if b.strip()]
 ALL_BOOKMAKERS = TARGET_BOOKMAKERS + SHARP_BOOKMAKERS
 
@@ -315,7 +315,11 @@ class OddsAPIFetcher:
                 elif key in SHARP_BOOKMAKERS:
                     sharp_markets.extend(normalized)
         
-        # PrizePicks-only: player props are the whole product, no game markets
+        # Game markets (moneyline + spreads) — Fliff prices these and they're
+        # one cheap sport-level call each
+        game_markets = ['h2h', 'spreads']
+
+        # Player props require the event-specific endpoint
         player_markets = {
             'basketball_nba': ['player_points', 'player_rebounds', 'player_assists'],
             'basketball_wnba': ['player_points', 'player_rebounds', 'player_assists',
@@ -324,6 +328,26 @@ class OddsAPIFetcher:
         }
         
         for sport in sports:
+            # Fetch game markets (h2h, spreads) — one call covers all books
+            for market in game_markets:
+                try:
+                    logger.info(f"Fetching {market} for {sport} ({bookmakers_param})...")
+                    events = self.get_odds(
+                        sport=sport,
+                        regions='us',
+                        markets=market,
+                        bookmakers=bookmakers_param
+                    )
+                    if events:
+                        for event in events:
+                            event['_sport'] = sport
+                            split_by_side(event)
+                        logger.info(f"  ✅ Got {len(events)} events")
+                    else:
+                        logger.warning(f"  ⚠️ No data for {market}")
+                except Exception as e:
+                    logger.error(f"  ❌ Error fetching {market}: {e}")
+
             # Fetch player props (event-specific endpoint)
             # NFL player props removed to save ~64 API calls
             markets_to_fetch = []

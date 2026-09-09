@@ -151,8 +151,8 @@ class TestEdgeMetric:
 
     FUTURE = '2030-01-01T00:00:00Z'
 
-    def test_non_prizepicks_targets_are_dropped(self, monkeypatch):
-        """The product is PrizePicks-only; other target books never surface."""
+    def test_non_fliff_targets_are_dropped(self, monkeypatch):
+        """The product is Fliff-only; other target books never surface."""
         target = [_mk('kalshi', 'h2h', 'A', 100, 2.0, ct=self.FUTURE)]
         sharp = [
             _mk('pinnacle', 'h2h', 'A', -120, 1.833, ct=self.FUTURE),
@@ -160,30 +160,28 @@ class TestEdgeMetric:
         ]
         assert self._opportunities(monkeypatch, target, sharp) == []
 
-    def test_prizepicks_edge_is_vs_flex_breakeven(self, monkeypatch):
-        target = [_mk('prizepicks', 'player_points', 'LeBron James', -137, 1.73,
-                      ct=self.FUTURE, line=25.5, selection='Over', sport='basketball_nba')]
+    def test_fliff_edge_is_plain_ev(self, monkeypatch):
+        """Fliff pays quoted odds with no fee: edge == EV% at its decimal price."""
+        target = [_mk('fliff', 'h2h', 'A', 110, 2.1, ct=self.FUTURE)]
         sharp = [
-            _mk('pinnacle', 'player_points', 'LeBron James', -130, 1.769,
-                ct=self.FUTURE, line=25.5, selection='Over', sport='basketball_nba'),
-            _mk('pinnacle', 'player_points', 'LeBron James', 105, 2.05,
-                ct=self.FUTURE, line=25.5, selection='Under', sport='basketball_nba'),
+            _mk('pinnacle', 'h2h', 'A', -110, 1.909, ct=self.FUTURE),
+            _mk('pinnacle', 'h2h', 'B', -110, 1.909, ct=self.FUTURE),
         ]
-        opps = self._opportunities(monkeypatch, target, sharp)
-        opp = opps[0]
-        assert abs(opp['edge'] - (opp['true_probability'] - 0.545) * 100) < 1e-9
+        opp = self._opportunities(monkeypatch, target, sharp)[0]
+        assert abs(opp['true_probability'] - 0.5) < 1e-9
+        assert abs(opp['edge'] - (2.1 * 0.5 - 1) * 100) < 1e-9   # +5%
+        assert abs(opp['edge'] - opp['ev_percent']) < 1e-9
 
     def test_live_games_are_dropped(self, monkeypatch):
         past = '2020-01-01T00:00:00Z'
 
         def prop(book, ct, event, sel):
-            return _mk(book, 'player_points', 'LeBron James', -137 if book == 'prizepicks' else -110,
-                       1.73 if book == 'prizepicks' else 1.909,
+            return _mk(book, 'player_points', 'LeBron James', -110, 1.909,
                        ct=ct, event=event, line=25.5, selection=sel, sport='basketball_nba')
 
         target = [
-            prop('prizepicks', past, 'A vs B', 'Over'),
-            prop('prizepicks', self.FUTURE, 'C vs D', 'Over'),
+            prop('fliff', past, 'A vs B', 'Over'),
+            prop('fliff', self.FUTURE, 'C vs D', 'Over'),
         ]
         sharp = [
             prop('pinnacle', past, 'A vs B', 'Over'),
