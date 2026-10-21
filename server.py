@@ -10,6 +10,7 @@ from flask import Flask, jsonify, render_template, send_file, Response, request
 from dotenv import load_dotenv
 
 from fetchers.odds_api import fetch_odds_data, CACHE_FILE, TARGET_BOOKMAKERS
+import fetchers.odds_api as odds_api
 from utils.matching import match_markets, MarketMatcher
 from utils.ev_calculator import calculate_ev_from_data, calculate_ev_multi_from_data
 
@@ -69,7 +70,7 @@ def _compute_opportunities():
     sharp_markets = odds_data.get('sharp', [])
 
     if not target_markets:
-        raise ValueError('No target-book markets found')
+        raise ValueError(odds_api.LAST_ERROR or 'No target-book markets found')
     if not sharp_markets:
         raise ValueError('No sharp-book markets found')
 
