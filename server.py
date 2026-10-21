@@ -9,7 +9,7 @@ from io import StringIO
 from flask import Flask, jsonify, render_template, send_file, Response, request
 from dotenv import load_dotenv
 
-from fetchers.odds_api import fetch_odds_data, CACHE_FILE
+from fetchers.odds_api import fetch_odds_data, CACHE_FILE, TARGET_BOOKMAKERS
 from utils.matching import match_markets, MarketMatcher
 from utils.ev_calculator import calculate_ev_from_data, calculate_ev_multi_from_data
 
@@ -82,9 +82,9 @@ def _compute_opportunities():
 
     opportunities = calculate_ev_multi_from_data(target_markets, sharp_markets, matched)
 
-    # Fliff-only product: drop anything else (e.g. stale cache rows)
+    # only the books you bet on (drops stale cache rows from a book you removed)
     opportunities = [o for o in opportunities
-                     if (o.get('target_book') or '').lower() == 'fliff']
+                     if (o.get('target_book') or '').lower() in TARGET_BOOKMAKERS]
 
     # Drop live/already-started games
     now = datetime.now(timezone.utc)
@@ -111,8 +111,8 @@ def _compute_opportunities():
         sharp_odds = opp.get('sharp_odds', 0)
         opp['value'] = odds_to_scale(target_odds) - odds_to_scale(sharp_odds)
 
-    # Edge: Fliff is a real sportsbook paying its quoted odds with no
-    # per-bet fee, so edge is plain EV% against the consensus probability.
+    # Edge: plain EV% against the consensus probability. Kalshi prices already include its
+    # taker fee (applied in the fetcher), so this is what you'd actually make.
     for opp in opportunities:
         opp['edge'] = opp.get('ev_percent')
 
@@ -163,7 +163,7 @@ def _compute_opportunities():
 
 @app.route('/api/ev')
 def get_ev_opportunities():
-    """Fliff markets (props, moneylines, spreads) with EV edge."""
+    """Target-book markets (props, moneylines, spreads) with EV edge."""
     try:
         opportunities = _compute_opportunities()
         positive_ev = [o for o in opportunities if o['ev'] > 0]

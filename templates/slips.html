@@ -13,7 +13,7 @@
         <header>
             <div class="logo-mark">🎯</div>
             <h1>FLIFF<span>JAM</span></h1>
-            <p>Fliff vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+            <p>Kalshi · Polymarket · Novig · ProphetX<br>vs Pinnacle · DraftKings · FanDuel</p>
         </header>
 
         <div class="nav-tabs">
@@ -29,7 +29,7 @@
             </div>
             <div class="filter-group">
                 <span style="color: var(--muted); font-size: 0.82em;">
-                    Parlays of +EV Fliff legs · cross-game only · EV compounds when every leg is +EV
+                    Parlays of +EV legs · cross-game only · EV compounds when every leg is +EV
                 </span>
             </div>
         </div>
@@ -44,14 +44,14 @@
         <div id="slipsContent" style="display: none; padding: 10px 28px 30px;"></div>
 
         <div id="noData" class="no-data" style="display: none;">
-            No positive-EV parlays on the current board — not enough +EV Fliff legs across different games. Check back after lines refresh.
+            No positive-EV parlays on the current board — not enough +EV legs across different games. Check back after lines refresh.
         </div>
     </div>
 
     <script>
         let allData = [];
         let fetchedAt = null;
-        const FLIFF_URL = 'https://sports.getfliff.com/';
+        const FLIFF_URL = 'https://kalshi.com/sports';   // where the bet buttons open (Kalshi combos; change for another book)
 
         window.addEventListener('DOMContentLoaded', loadData);
         setInterval(updateDataAge, 60000);
@@ -138,7 +138,7 @@
             return div.innerHTML;
         }
 
-        // ---- leg pool: +EV Fliff legs, upcoming, sharp books agreeing ----
+        // ---- leg pool: +EV legs, upcoming, sharp books agreeing ----
         function parlayLegPool() {
             const now = Date.now();
             const base = allData.filter(i =>
@@ -192,7 +192,7 @@
             return out.slice(0, keep);
         }
 
-        // ---- fade: the exact opposite side of every leg, priced at Fliff ----
+        // ---- fade: the exact opposite side of every leg, priced at your book ----
         function oppositeLeg(leg) {
             const isProp = !!leg.selection;
             return allData.find(o =>
@@ -207,7 +207,7 @@
 
         function buildFade(parlay) {
             const legs = parlay.legs.map(oppositeLeg);
-            if (legs.some(l => !l)) return null;  // Fliff doesn't price every other side
+            if (legs.some(l => !l)) return null;  // your book doesn't price every other side
             return scoreParlay(legs);
         }
 
@@ -300,10 +300,10 @@
                         <div style="display:flex; gap:6px; justify-content:flex-end;">
                             ${trackBtn('parlay', idx, p.legs)}
                             ${fade ? `<a href="${FLIFF_URL}" target="_blank" rel="noopener" class="btn btn-primary"
-                                   style="padding:5px 12px; margin-top:6px;" title="Opens Fliff and shows the flipped legs below"
+                                   style="padding:5px 12px; margin-top:6px;" title="Opens Kalshi and shows the flipped legs below"
                                    onclick="showFade(${idx})">Fade ↗</a>` : ''}
                             <a href="${FLIFF_URL}" target="_blank" rel="noopener" class="btn btn-primary"
-                               style="padding:5px 12px; margin-top:6px;">Bet on Fliff ↗</a>
+                               style="padding:5px 12px; margin-top:6px;">Open Kalshi ↗</a>
                         </div>
                     </div>
                     ${fade ? `

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FliffJam - Player Props</title>
+    <title>FliffJam - +EV Finder</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -315,7 +315,7 @@
         <header>
             <div class="logo-mark">🎯</div>
             <h1>FLIFF<span>JAM</span></h1>
-            <p>Fliff vs sharp books<br>Pinnacle · DraftKings · FanDuel</p>
+            <p>Kalshi · Polymarket · Novig · ProphetX<br>vs Pinnacle · DraftKings · FanDuel</p>
         </header>
         
         <div class="nav-tabs">
@@ -394,12 +394,12 @@
                         <th class="sortable" onclick="sortTable('market_key')">Type</th>
                         <th class="sortable" onclick="sortTable('line')">Line</th>
                         <th class="sortable" onclick="sortTable('selection')">Over/Under</th>
-                        <th class="sortable" onclick="sortTable('target_odds')">Fliff</th>
+                        <th class="sortable" onclick="sortTable('target_odds')" title="Your book's price. Kalshi prices include its taker fee">Your book</th>
                         <th>Pinnacle</th>
                         <th>DraftKings</th>
                         <th>FanDuel</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
-                        <th class="sortable" onclick="sortTable('edge')" title="Expected value % at Fliff's price vs the de-vigged sharp consensus">EV</th>
+                        <th class="sortable" onclick="sortTable('edge')" title="Expected value % at your book's price (after Kalshi's fee) vs the de-vigged sharp consensus">EV</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -413,6 +413,8 @@
     </div>
     
     <script>
+        const BOOK_NAMES = { kalshi: 'Kalshi', polymarket_us: 'Polymarket US', polymarket: 'Polymarket', novig: 'Novig', prophetx: 'ProphetX', betopenly: 'BetOpenly', fliff: 'Fliff', bovada: 'Bovada', betonlineag: 'BetOnline' };
+        const bookName = b => BOOK_NAMES[b] || b || '';
         let allData = [];
         let filteredData = [];
         let sortColumn = 'edge';
@@ -668,7 +670,7 @@
                         <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
                         <td>${item.selection || '-'}</td>
-                        <td><strong>${formatOdds(item.target_odds)}</strong></td>
+                        <td><strong>${formatOdds(item.target_odds)}</strong><br><small style="opacity:.7">${bookName(item.target_book)}</small></td>
                         ${sharpCell(item, 'pinnacle')}
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
@@ -749,7 +751,7 @@
             const v = item.edge;
             if (v === null || v === undefined) return `<td>-${warnHtml}</td>`;
             const cls = v > 0 ? 'ev-positive' : 'ev-negative';
-            return `<td class="ev-value ${cls}" title="Expected value per $1 at Fliff's price vs the de-vigged sharp consensus">${v > 0 ? '+' : ''}${v.toFixed(1)}%${warnHtml}</td>`;
+            return `<td class="ev-value ${cls}" title="Expected value per $1 at your book's price (after Kalshi's fee) vs the de-vigged sharp consensus">${v > 0 ? '+' : ''}${v.toFixed(1)}%${warnHtml}</td>`;
         }
 
         function escapeHtml(text) {
