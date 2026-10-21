@@ -11,5 +11,7 @@ services:
         value: False
       - key: CACHE_TTL
         value: 1800
+      - key: ODDS_API_KEYS   # all your keys, comma separated: the app rotates through them
+        sync: false
       - key: ODDS_API_KEY
         sync: false

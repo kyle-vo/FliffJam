@@ -20,16 +20,18 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = int(os.getenv('CACHE_TTL', 1800))  # 30 minutes (1800 seconds) default
 CACHE_FILE = Path('cache_data.json')
 
-# Multiple API keys for rotation - load from environment variable
-# Set in .env as: ODDS_API_KEYS=key1,key2,key3
-api_keys_env = os.getenv('ODDS_API_KEYS', '')
-if api_keys_env:
-    API_KEYS = [key.strip() for key in api_keys_env.split(',')]
-else:
-    # Fallback to single key for backwards compatibility
-    API_KEYS = [os.getenv('ODDS_API_KEY', '')]
+# Multiple API keys for rotation: ODDS_API_KEYS=key1,key2,... (commas, spaces or new lines), plus ODDS_API_KEY if set.
+# Empty entries (a trailing comma) are dropped, so they never count as a key.
+API_KEYS = []
+for _k in (os.getenv('ODDS_API_KEYS', '').replace('\n', ',').replace(' ', ',').split(',') + [os.getenv('ODDS_API_KEY', '')]):
+    if _k.strip() and _k.strip() not in API_KEYS: API_KEYS.append(_k.strip())
+if not API_KEYS: API_KEYS = ['']
+# The Odds API answers 401 when a key is out of credits ("Usage quota has been reached", OUT_OF_USAGE_CREDITS),
+# 402 on some plans, and 429 when it is called too fast. All three mean: try the next key.
+ROTATE_ON = (401, 402, 429)
 
 current_key_index = 0
+LAST_ERROR = None   # shown on the page when every key is dead, instead of a blank board
 
 # Books you actually bet on vs the sharp books whose de-vigged lines act as "true" probability.
 # Default targets are the exchanges The Odds API serves (its us_ex region): Kalshi, Polymarket US, Novig, ProphetX.
@@ -119,7 +121,7 @@ class OddsAPIFetcher:
     
     def _make_request(self, endpoint: str, params: Dict) -> Optional[Dict]:
         """Make API request with error handling and automatic key rotation on quota exhaustion."""
-        global current_key_index
+        global current_key_index, LAST_ERROR
         
         url = f"{self.BASE_URL}/{endpoint}"
         params['apiKey'] = self.api_key
@@ -127,21 +129,23 @@ class OddsAPIFetcher:
         try:
             response = self.session.get(url, params=params, timeout=10)
 
-            # On a quota-exhausted key (402), keep rotating until a key with
-            # quota is found — trying just one neighbor fails when several
-            # consecutive keys are dead.
+            # Out of credits (401/402) or rate limited (429): walk every other key once before giving up.
+            # The old loop only rotated on 402, but an exhausted key answers 401, so it never moved off a dead key.
             attempts = 0
-            while response.status_code == 402 and attempts < len(API_KEYS) - 1:
-                logger.warning("⚠️ API key exhausted (402). Rotating...")
+            while response.status_code in ROTATE_ON and attempts < len(API_KEYS) - 1:
+                why = 'rate limited' if response.status_code == 429 else 'out of credits'
+                logger.warning(f"⚠️ API key #{API_KEYS.index(self.api_key) + 1 if self.api_key in API_KEYS else '?'} {why} ({response.status_code}). Rotating...")
+                if response.status_code == 429: time.sleep(1)
                 self.api_key = API_KEYS[current_key_index]
                 current_key_index = (current_key_index + 1) % len(API_KEYS)
-                logger.info(f"🔄 Switched to API key #{current_key_index} of {len(API_KEYS)}")
+                logger.info(f"🔄 Switched to API key #{API_KEYS.index(self.api_key) + 1} of {len(API_KEYS)}")
                 params['apiKey'] = self.api_key
                 response = self.session.get(url, params=params, timeout=10)
                 attempts += 1
 
-            if response.status_code == 402:
-                logger.error("❌ All API keys exhausted!")
+            if response.status_code in ROTATE_ON:
+                logger.error(f"❌ All {len(API_KEYS)} API keys out of credits or rate limited ({response.status_code}): {response.text[:120]}")
+                LAST_ERROR = f"All {len(API_KEYS)} Odds API keys are out of credits or rate limited"
                 return None
 
             # Call succeeded but drained this key: keep the data, rotate for
@@ -310,6 +314,8 @@ class OddsAPIFetcher:
                 'sharp': [normalized_markets]     # pinnacle + draftkings + fanduel
             }
         """
+        global LAST_ERROR
+        LAST_ERROR = None
         # Check if we have cached data from file
         cached_data = load_cache()
         if cached_data and 'target' in cached_data:
