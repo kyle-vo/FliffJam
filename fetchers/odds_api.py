@@ -31,12 +31,32 @@ else:
 
 current_key_index = 0
 
-# Books you actually bet on (kalshi = exchange, prizepicks = DFS) vs the sharp
-# books whose de-vigged lines act as "true" probability. Priority order of
-# SHARP_BOOKMAKERS matters: matching prefers the first book that has the line.
-TARGET_BOOKMAKERS = [b.strip() for b in os.getenv('TARGET_BOOKMAKERS', 'fliff').split(',') if b.strip()]
+# Books you actually bet on vs the sharp books whose de-vigged lines act as "true" probability.
+# Default targets are the exchanges The Odds API serves (its us_ex region): Kalshi, Polymarket US, Novig, ProphetX.
+# Fliff stopped allowing singles, so it is no longer a default (add it back with TARGET_BOOKMAKERS=fliff,...).
+# Priority order of SHARP_BOOKMAKERS matters: matching prefers the first book that has the line.
+TARGET_BOOKMAKERS = [b.strip() for b in os.getenv('TARGET_BOOKMAKERS', 'kalshi,polymarket_us,novig,prophetx').split(',') if b.strip()]
 SHARP_BOOKMAKERS = [b.strip() for b in os.getenv('SHARP_BOOKMAKERS', 'pinnacle,draftkings,fanduel').split(',') if b.strip()]
 ALL_BOOKMAKERS = TARGET_BOOKMAKERS + SHARP_BOOKMAKERS
+# Demo data is fake +EV for showing the UI: never on a live site unless asked for
+DEMO_MODE = os.getenv('DEMO_MODE', '').lower() in ('1', 'true', 'yes')
+
+
+def kalshi_fee(p: float) -> float:
+    """Kalshi's taker fee per $1 contract at price p: 0.07 x p x (1 - p) (about 1.75c at 50c)"""
+    return 0.07 * p * (1 - p)
+
+
+def apply_exchange_fee(m: Dict) -> Dict:
+    """Turn an exchange quote into what you actually get paid: a Kalshi ask of 50c costs 51.75c after the fee.
+    The Odds API's price is the bare ask, so without this every Kalshi line looks about 3.5% better than it is."""
+    if m.get('bookmaker') != 'kalshi' or not m.get('decimal_odds') or m['decimal_odds'] <= 1: return m
+    p = 1.0 / m['decimal_odds']; cost = min(0.999, p + kalshi_fee(p)); dec = 1.0 / cost
+    m['raw_american_odds'] = m.get('american_odds')
+    m['decimal_odds'] = round(dec, 4)
+    m['american_odds'] = int(round((dec - 1) * 100)) if dec >= 2 else int(round(-100 / (dec - 1)))
+    m['fee_adjusted'] = True
+    return m
 
 
 def load_cache() -> Dict:
@@ -311,7 +331,7 @@ class OddsAPIFetcher:
                 for m in normalized:
                     m['sport'] = event_data.get('_sport', '')
                 if key in TARGET_BOOKMAKERS:
-                    target_markets.extend(normalized)
+                    target_markets.extend(apply_exchange_fee(m) for m in normalized)
                 elif key in SHARP_BOOKMAKERS:
                     sharp_markets.extend(normalized)
         
@@ -407,8 +427,11 @@ class OddsAPIFetcher:
         logger.info(f"📊 REAL DATA LOADED - {len(target_markets)} target markets ({'/'.join(TARGET_BOOKMAKERS)}), {len(sharp_markets)} sharp markets ({'/'.join(SHARP_BOOKMAKERS)})")
 
         if not target_markets:
-            logger.warning("No target-book data found - falling back to demo")
-            return self._get_demo_data()
+            if DEMO_MODE:
+                logger.warning("No target-book data found - DEMO_MODE on, showing demo data")
+                return self._get_demo_data()
+            logger.warning("No target-book data found (books not pricing these games yet?) - returning nothing rather than fake demo edges")
+            return {'target': [], 'sharp': sharp_markets}
 
         result = {
             'target': target_markets,
