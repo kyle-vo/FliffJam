@@ -151,18 +151,18 @@ class TestEdgeMetric:
 
     FUTURE = '2030-01-01T00:00:00Z'
 
-    def test_non_fliff_targets_are_dropped(self, monkeypatch):
-        """The product is Fliff-only; other target books never surface."""
-        target = [_mk('kalshi', 'h2h', 'A', 100, 2.0, ct=self.FUTURE)]
+    def test_non_target_books_are_dropped(self, monkeypatch):
+        """Only TARGET_BOOKMAKERS surface (e.g. stale cache rows from a removed book)."""
+        target = [_mk('fliff', 'h2h', 'A', 100, 2.0, ct=self.FUTURE)]
         sharp = [
             _mk('pinnacle', 'h2h', 'A', -120, 1.833, ct=self.FUTURE),
             _mk('pinnacle', 'h2h', 'B', 100, 2.0, ct=self.FUTURE),
         ]
         assert self._opportunities(monkeypatch, target, sharp) == []
 
-    def test_fliff_edge_is_plain_ev(self, monkeypatch):
-        """Fliff pays quoted odds with no fee: edge == EV% at its decimal price."""
-        target = [_mk('fliff', 'h2h', 'A', 110, 2.1, ct=self.FUTURE)]
+    def test_edge_is_plain_ev(self, monkeypatch):
+        """Edge == EV% at the target book's decimal price (fees already in the price)."""
+        target = [_mk('novig', 'h2h', 'A', 110, 2.1, ct=self.FUTURE)]
         sharp = [
             _mk('pinnacle', 'h2h', 'A', -110, 1.909, ct=self.FUTURE),
             _mk('pinnacle', 'h2h', 'B', -110, 1.909, ct=self.FUTURE),
@@ -180,8 +180,8 @@ class TestEdgeMetric:
                        ct=ct, event=event, line=25.5, selection=sel, sport='basketball_nba')
 
         target = [
-            prop('fliff', past, 'A vs B', 'Over'),
-            prop('fliff', self.FUTURE, 'C vs D', 'Over'),
+            prop('novig', past, 'A vs B', 'Over'),
+            prop('novig', self.FUTURE, 'C vs D', 'Over'),
         ]
         sharp = [
             prop('pinnacle', past, 'A vs B', 'Over'),
