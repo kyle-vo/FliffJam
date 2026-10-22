@@ -141,7 +141,12 @@
         // ---- leg pool: +EV legs, upcoming, sharp books agreeing ----
         function parlayLegPool() {
             const now = Date.now();
+            // Respect the book checklist set on the Player Props page
+            let excluded;
+            try { excluded = new Set(JSON.parse(localStorage.getItem('excludedBooks') || '[]')); }
+            catch (e) { excluded = new Set(); }
             const base = allData.filter(i =>
+                !excluded.has(i.target_book || '') &&
                 i.ev > 0 &&
                 i.target_decimal && i.true_probability !== null && i.true_probability !== undefined &&
                 (!i.commence_time || new Date(i.commence_time) > now)

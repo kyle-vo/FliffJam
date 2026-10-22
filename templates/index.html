@@ -181,6 +181,28 @@
 
         .filter-group input[type="checkbox"] { accent-color: var(--accent); }
 
+        .book-filter { position: relative; }
+        .book-filter summary {
+            list-style: none; cursor: pointer; padding: 7px 10px;
+            background: var(--panel-2); border: 1px solid var(--border);
+            border-radius: 7px; font-size: 0.85em; color: var(--text); user-select: none;
+        }
+        .book-filter summary::-webkit-details-marker { display: none; }
+        .book-filter[open] summary { border-color: var(--accent); }
+        .book-menu {
+            position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; min-width: 190px;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+            padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+        }
+        .book-menu label { display: flex; align-items: center; gap: 8px; padding: 5px 6px;
+            border-radius: 5px; cursor: pointer; color: var(--text); font-weight: 500; }
+        .book-menu label:hover { background: var(--panel-2); }
+        .book-menu .count { margin-left: auto; color: var(--muted); font-size: 0.85em; }
+        .book-menu .actions { display: flex; gap: 6px; border-top: 1px solid var(--border);
+            margin-top: 6px; padding-top: 6px; }
+        .book-menu .actions button { flex: 1; padding: 4px; font-size: 0.8em; background: var(--panel-2);
+            color: var(--text); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; }
+
         .loading {
             text-align: center;
             padding: 70px;
@@ -334,6 +356,18 @@
                 <label for="minEdge">Min EV %:</label>
                 <input type="number" id="minEdge" value="" step="0.5" placeholder="any" onchange="applyFilters()" style="width: 80px;" title="Only show bets at or above this EV%">
 
+                <label>Books:</label>
+                <details class="book-filter" id="bookFilter">
+                    <summary id="bookSummary">All books ▾</summary>
+                    <div class="book-menu">
+                        <div id="bookList"></div>
+                        <div class="actions">
+                            <button type="button" onclick="setAllBooks(true)">All</button>
+                            <button type="button" onclick="setAllBooks(false)">None</button>
+                        </div>
+                    </div>
+                </details>
+
                 <label for="sportFilter">Sport:</label>
                 <select id="sportFilter" onchange="applyFilters()">
                     <option value="">All Sports</option>
@@ -415,6 +449,49 @@
     <script>
         const BOOK_NAMES = { kalshi: 'Kalshi', polymarket_us: 'Polymarket US', polymarket: 'Polymarket', novig: 'Novig', prophetx: 'ProphetX', betopenly: 'BetOpenly', fliff: 'Fliff', bovada: 'Bovada', betonlineag: 'BetOnline' };
         const bookName = b => BOOK_NAMES[b] || b || '';
+
+        // Book checklist: stores the books the user UNchecked, so books that
+        // appear on the board later are included by default.
+        function getExcludedBooks() {
+            try { return new Set(JSON.parse(localStorage.getItem('excludedBooks') || '[]')); }
+            catch (e) { return new Set(); }
+        }
+        function saveExcludedBooks(set) {
+            localStorage.setItem('excludedBooks', JSON.stringify([...set]));
+        }
+        function renderBookFilter() {
+            const counts = {};
+            allData.forEach(i => { const b = i.target_book || ''; counts[b] = (counts[b] || 0) + 1; });
+            const excluded = getExcludedBooks();
+            const books = Object.keys(counts).sort((a, b) => bookName(a).localeCompare(bookName(b)));
+            document.getElementById('bookList').innerHTML = books.map(b => `
+                <label><input type="checkbox" value="${b}" ${excluded.has(b) ? '' : 'checked'}
+                    onchange="toggleBook(this.value, this.checked)">
+                    ${escapeHtml(bookName(b))}<span class="count">${counts[b]}</span></label>`).join('');
+            const on = books.filter(b => !excluded.has(b));
+            document.getElementById('bookSummary').textContent =
+                on.length === books.length ? 'All books ▾'
+                : on.length === 0 ? 'No books ▾'
+                : on.length <= 2 ? on.map(bookName).join(', ') + ' ▾'
+                : `${on.length} of ${books.length} books ▾`;
+        }
+        function toggleBook(book, checked) {
+            const excluded = getExcludedBooks();
+            checked ? excluded.delete(book) : excluded.add(book);
+            saveExcludedBooks(excluded);
+            renderBookFilter();
+            applyFilters();
+        }
+        function setAllBooks(on) {
+            const books = [...new Set(allData.map(i => i.target_book || ''))];
+            saveExcludedBooks(on ? new Set() : new Set(books));
+            renderBookFilter();
+            applyFilters();
+        }
+        document.addEventListener('click', e => {
+            const d = document.getElementById('bookFilter');
+            if (d && d.open && !d.contains(e.target)) d.open = false;
+        });
         let allData = [];
         let filteredData = [];
         let sortColumn = 'edge';
@@ -472,6 +549,7 @@
                 allData = data.opportunities || [];
                 fetchedAt = data.fetched_at || null;
                 updateDataAge();
+                renderBookFilter();
 
                 // Show demo alert if we have demo data
                 const demoAlert = document.getElementById('demoAlert');
@@ -574,8 +652,12 @@
             const marketFilter = document.getElementById('marketFilter').value;
             const hideTracked = document.getElementById('hideTracked').checked;
             const tracked = getTrackedBets();
+            const excludedBooks = getExcludedBooks();
 
             filteredData = allData.filter(item => {
+                // Book checklist
+                if (excludedBooks.has(item.target_book || '')) return false;
+
                 // Minimum edge filter
                 if (item.edge === null || item.edge === undefined) return false;
                 if (item.edge < minEdge) return false;
