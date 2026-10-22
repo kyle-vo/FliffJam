@@ -372,7 +372,6 @@
                 <select id="sportFilter" onchange="applyFilters()">
                     <option value="">All Sports</option>
                     <option value="NBA">NBA</option>
-                    <option value="WNBA">WNBA</option>
                     <option value="MLB">MLB</option>
                     <option value="NFL">NFL</option>
                 </select>
@@ -394,8 +393,13 @@
                     <optgroup label="Game">
                         <option value="Moneyline">Moneyline</option>
                         <option value="Spread">Spread</option>
+                        <option value="Total">Total</option>
                     </optgroup>
                 </select>
+
+                <label for="bankroll">Bankroll $:</label>
+                <input type="number" id="bankroll" min="0" step="50" placeholder="e.g. 500" style="width: 90px;"
+                       onchange="saveBankroll(); renderTable()" title="Used for the suggested stake (quarter Kelly, capped at 3%)">
 
                 <label style="margin-left: 20px;">
                     <input type="checkbox" id="hideTracked" onchange="applyFilters()">
@@ -434,6 +438,7 @@
                         <th>FanDuel</th>
                         <th class="sortable" onclick="sortTable('true_probability')">True Prob</th>
                         <th class="sortable" onclick="sortTable('edge')" title="Expected value % at your book's price (after Kalshi's fee) vs the de-vigged sharp consensus">EV</th>
+                        <th title="Suggested stake: quarter Kelly on your bankroll, capped at 3%">Stake</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -501,6 +506,8 @@
 
         // Load data on page load
         window.addEventListener('DOMContentLoaded', () => {
+            const br = getBankroll();
+            if (br) document.getElementById('bankroll').value = br;
             loadData();
             setInterval(updateDataAge, 60000);  // tick the age display every minute
         });
@@ -752,12 +759,13 @@
                         <td><span class="badge badge-info">${formatMarketKey(item.market_key)}</span></td>
                         <td>${item.line !== null ? item.line : 'N/A'}</td>
                         <td>${item.selection || '-'}</td>
-                        <td><strong>${formatOdds(item.target_odds)}</strong><br><small style="opacity:.7">${bookName(item.target_book)}</small></td>
+                        <td><strong>${formatOdds(item.target_odds)}</strong><br><small style="opacity:.7">${bookName(item.target_book)}</small>${otherBooksHtml(item)}</td>
                         ${sharpCell(item, 'pinnacle')}
                         ${sharpCell(item, 'draftkings')}
                         ${sharpCell(item, 'fanduel')}
                         <td title="Consensus of ${item.consensus_books || 1} sharp book${(item.consensus_books || 1) > 1 ? 's' : ''}, de-vigged">${(item.true_probability * 100).toFixed(1)}%${ppBadge}</td>
                         ${edgeCell(item, warnHtml)}
+                        <td>${stakeHtml(item)}</td>
                     </tr>
                 `;
             }).join('');
@@ -808,6 +816,7 @@
             const map = {
                 'h2h': 'ML',
                 'spreads': 'Spread',
+                'totals': 'Total',
                 'player_points': 'Points',
                 'player_rebounds': 'Rebounds',
                 'player_assists': 'Assists',
@@ -829,6 +838,33 @@
         
         // Edge column: the number that decides money.
         // Kalshi → fee-adjusted EV%. PrizePicks → prob points vs 6-flex breakeven.
+        // Other books offering the same bet at a worse price
+        function otherBooksHtml(item) {
+            const others = (item.other_books || []).filter(o => !getExcludedBooks().has(o.book));
+            if (!others.length) return '';
+            return '<div style="font-size:10px; color:var(--muted); margin-top:2px;">' +
+                others.map(o => `${escapeHtml(bookName(o.book))} ${formatOdds(o.odds)}`).join(' · ') + '</div>';
+        }
+
+        // ---- Suggested stake: quarter Kelly, capped at 3% of bankroll ----
+        function getBankroll() {
+            try { return parseFloat(localStorage.getItem('bankroll')) || 0; } catch (e) { return 0; }
+        }
+        function saveBankroll() {
+            const v = parseFloat(document.getElementById('bankroll').value);
+            localStorage.setItem('bankroll', isNaN(v) ? '' : String(v));
+        }
+        function stakeHtml(item) {
+            const bankroll = getBankroll();
+            const dec = item.target_decimal, p = item.true_probability;
+            if (!bankroll || !dec || dec <= 1 || p == null || item.edge <= 0) return '<span style="color:var(--muted)">—</span>';
+            const b = dec - 1;
+            const kelly = (b * p - (1 - p)) / b;
+            const frac = Math.min(0.25 * kelly, 0.03);
+            if (frac <= 0) return '<span style="color:var(--muted)">—</span>';
+            return `<strong>$${(frac * bankroll).toFixed(frac * bankroll < 10 ? 2 : 0)}</strong><br><small style="color:var(--muted)">${(frac * 100).toFixed(1)}%</small>`;
+        }
+
         function edgeCell(item, warnHtml = '') {
             const v = item.edge;
             if (v === null || v === undefined) return `<td>-${warnHtml}</td>`;

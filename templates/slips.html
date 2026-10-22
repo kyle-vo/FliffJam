@@ -29,7 +29,7 @@
             </div>
             <div class="filter-group">
                 <span style="color: var(--muted); font-size: 0.82em;">
-                    Parlays of +EV legs · cross-game only · EV compounds when every leg is +EV
+                    2-leg parlays of +EV singles · cross-game only · no ⚠️ legs
                 </span>
             </div>
         </div>
@@ -123,7 +123,7 @@
 
         function formatMarketKey(key) {
             const map = {
-                'h2h': 'ML', 'spreads': 'Spread',
+                'h2h': 'ML', 'spreads': 'Spread', 'totals': 'Total',
                 'player_points': 'Points', 'player_rebounds': 'Rebounds',
                 'player_assists': 'Assists', 'player_points_assists': 'Pts + Ast',
                 'player_points_rebounds': 'Pts + Reb',
@@ -151,8 +151,8 @@
                 i.target_decimal && i.true_probability !== null && i.true_probability !== undefined &&
                 (!i.commence_time || new Date(i.commence_time) > now)
             );
-            let candidates = base.filter(i => sharpSpread(i) <= 40);
-            if (candidates.length < 4) candidates = base;
+            // Every leg must be a bet you'd take as a single: +EV and sharp books in agreement
+            const candidates = base.filter(i => sharpSpread(i) <= 40);
 
             // One best pick per player+market (never both sides of a line)
             const best = {};
@@ -336,16 +336,11 @@
             const pool = parlayLegPool();
 
             const twos = buildParlays(pool, 2, 15, 5);
-            const threes = buildParlays(pool, 3, 12, 3);
-            rendered = [...threes, ...twos];
+            rendered = [...twos];
             renderedFades = rendered.map(buildFade);
 
             let html = '';
             let idx = 0;
-            if (threes.length) {
-                html += '<div class="section-label">Best 3-Leg Parlays</div>';
-                html += threes.map(p => cardHtml(p, idx++)).join('');
-            }
             if (twos.length) {
                 html += '<div class="section-label">Best 2-Leg Parlays</div>';
                 html += twos.map(p => cardHtml(p, idx++)).join('');

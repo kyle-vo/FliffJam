@@ -272,6 +272,11 @@ class OddsAPIFetcher:
                 # and 'name' contains Over/Under
                 player_name = description if description else name
                 selection = name if description else ''
+                # Game totals have no player: key them on the game itself so
+                # Over/Under pair up per game for de-vigging
+                if market_key == 'totals':
+                    player_name = event_name
+                    selection = name
                 
                 # Convert American odds to decimal
                 decimal_odds = self._american_to_decimal(price)
@@ -323,7 +328,7 @@ class OddsAPIFetcher:
             return cached_data
 
         if sports is None:
-            sports = ['basketball_nba', 'basketball_wnba', 'baseball_mlb', 'americanfootball_nfl']
+            sports = ['basketball_nba', 'baseball_mlb', 'americanfootball_nfl']
 
         target_markets = []
         sharp_markets = []
@@ -341,15 +346,12 @@ class OddsAPIFetcher:
                 elif key in SHARP_BOOKMAKERS:
                     sharp_markets.extend(normalized)
         
-        # Game markets (moneyline + spreads) — Fliff prices these and they're
-        # one cheap sport-level call each
-        game_markets = ['h2h', 'spreads']
+        # Game markets — one cheap sport-level call each
+        game_markets = ['h2h', 'spreads', 'totals']
 
         # Player props require the event-specific endpoint
         player_markets = {
             'basketball_nba': ['player_points', 'player_rebounds', 'player_assists'],
-            'basketball_wnba': ['player_points', 'player_rebounds', 'player_assists',
-                                'player_points_assists', 'player_points_rebounds'],
             'baseball_mlb': ['pitcher_strikeouts', 'batter_total_bases']
         }
         

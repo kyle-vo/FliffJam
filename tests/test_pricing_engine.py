@@ -212,3 +212,57 @@ class TestMatchingTimeGuard:
         matched = MarketMatcher().match_markets_multi([target], sharp)
         assert len(matched) == 1
         assert 'pinnacle' in matched[0]['sharps']
+
+
+class TestBoardShape:
+    """Exact line matching, one row per bet, and game totals."""
+
+    FUTURE = '2030-01-01T00:00:00Z'
+
+    def _opportunities(self, monkeypatch, target, sharp):
+        import server
+        monkeypatch.setattr(server, 'fetch_odds_data',
+                            lambda: {'target': target, 'sharp': sharp})
+        return server._compute_opportunities()
+
+    def _spread_sharps(self, line):
+        return [
+            _mk('pinnacle', 'spreads', 'A', -110, 1.909, ct=self.FUTURE, line=line),
+            _mk('pinnacle', 'spreads', 'B', -110, 1.909, ct=self.FUTURE, line=-line),
+        ]
+
+    def test_spread_half_point_off_is_not_matched(self, monkeypatch):
+        """A -3 bet must never be priced off a -3.5 sharp line."""
+        target = [_mk('novig', 'spreads', 'A', 100, 2.0, ct=self.FUTURE, line=-3.0)]
+        with pytest.raises(ValueError):  # nothing matches -> no-data error
+            self._opportunities(monkeypatch, target, self._spread_sharps(-3.5))
+
+    def test_spread_same_line_is_matched(self, monkeypatch):
+        target = [_mk('novig', 'spreads', 'A', 100, 2.0, ct=self.FUTURE, line=-3.5)]
+        opps = self._opportunities(monkeypatch, target, self._spread_sharps(-3.5))
+        assert len(opps) == 1 and opps[0]['line'] == -3.5
+
+    def test_same_bet_collapses_to_best_price(self, monkeypatch):
+        target = [
+            _mk('novig', 'spreads', 'A', 100, 2.0, ct=self.FUTURE, line=-3.5),
+            _mk('prophetx', 'spreads', 'A', 110, 2.1, ct=self.FUTURE, line=-3.5),
+        ]
+        opps = self._opportunities(monkeypatch, target, self._spread_sharps(-3.5))
+        assert len(opps) == 1
+        assert opps[0]['target_book'] == 'prophetx'
+        assert [o['book'] for o in opps[0]['other_books']] == ['novig']
+
+    def test_totals_devig_per_game(self, monkeypatch):
+        """Over/Under 220.5 at -110/-110 de-vigs to 50%."""
+        ev = 'A vs B'
+        target = [_mk('novig', 'totals', ev, 100, 2.0, ct=self.FUTURE, line=220.5,
+                      selection='Over', sport='basketball_nba')]
+        sharp = [
+            _mk('pinnacle', 'totals', ev, -110, 1.909, ct=self.FUTURE, line=220.5,
+                selection='Over', sport='basketball_nba'),
+            _mk('pinnacle', 'totals', ev, -110, 1.909, ct=self.FUTURE, line=220.5,
+                selection='Under', sport='basketball_nba'),
+        ]
+        opp = self._opportunities(monkeypatch, target, sharp)[0]
+        assert abs(opp['true_probability'] - 0.5) < 1e-9
+        assert opp['type'] == 'Total'

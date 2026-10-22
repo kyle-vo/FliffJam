@@ -76,7 +76,9 @@ def _compute_opportunities():
 
     logger.info(f"Fetched {len(target_markets)} target markets and {len(sharp_markets)} sharp markets")
 
-    matched = MarketMatcher().match_markets_multi(target_markets, sharp_markets)
+    # Exact line match only: pricing a -3 bet off a -3.5 sharp line (or a
+    # 6 prop off 6.5) silently mis-states the probability
+    matched = MarketMatcher(line_tolerance=0.01).match_markets_multi(target_markets, sharp_markets)
     if not matched:
         raise ValueError('No matching markets found')
     logger.info(f"Matched {len(matched)} markets")
@@ -127,6 +129,7 @@ def _compute_opportunities():
         'player_rebounds_assists': 'Rebounds + Assists',
         'player_points_rebounds_assists': 'Pts + Reb + Ast',
         'spreads': 'Spread',
+        'totals': 'Total',
         'h2h': 'Moneyline',
         'batter_hits': 'Hits',
         'batter_home_runs': 'Home Runs',
@@ -159,7 +162,23 @@ def _compute_opportunities():
                          'Eagles', 'Washington', '49ers', 'Commanders']
             opp['sport'] = 'NFL' if any(team in event for team in nfl_teams) else 'NBA'
 
-    return opportunities
+    # One row per bet: the same side/line offered by several books collapses
+    # to the best price; the rest ride along for display
+    best = {}
+    for opp in opportunities:
+        key = (opp.get('event'), opp.get('commence_time'), opp.get('market_key'),
+               opp.get('player'), opp.get('line'), (opp.get('selection') or '').lower())
+        best.setdefault(key, []).append(opp)
+    collapsed = []
+    for group in best.values():
+        group.sort(key=lambda o: o.get('target_decimal') or 0, reverse=True)
+        top = group[0]
+        top['other_books'] = [
+            {'book': o.get('target_book'), 'odds': o.get('target_odds'), 'edge': o.get('edge')}
+            for o in group[1:]
+        ]
+        collapsed.append(top)
+    return collapsed
 
 
 @app.route('/api/ev')
